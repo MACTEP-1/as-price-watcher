@@ -32,32 +32,65 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        {/* Logo / brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#0060ac] rounded-2xl mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 16px',
+      background: '#f8fafc',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    }}>
+      <div style={{ width: '100%', maxWidth: '360px' }}>
+
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '56px',
+            height: '56px',
+            background: '#0060ac',
+            borderRadius: '16px',
+            marginBottom: '16px',
+          }}>
+            <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">AS Price Watch</h1>
-          <p className="mt-1 text-sm text-slate-500">Track Alaska Airlines fares — cash & miles</p>
+          <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: '700', color: '#0f172a' }}>
+            AS Price Watch
+          </h1>
+          <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>
+            Track Alaska Airlines fares — cash &amp; miles
+          </p>
         </div>
 
         {sent ? (
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 text-center">
-            <div className="text-2xl mb-2">✉️</div>
-            <p className="font-medium text-green-800 dark:text-green-300">Check your email</p>
-            <p className="mt-1 text-sm text-green-600 dark:text-green-400">
+          <div style={{
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: '12px',
+            padding: '24px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '32px', marginBottom: '8px' }}>✉️</div>
+            <p style={{ margin: '0 0 4px', fontWeight: '600', color: '#166534' }}>Check your email</p>
+            <p style={{ margin: 0, fontSize: '14px', color: '#16a34a' }}>
               We sent a magic link to <strong>{email}</strong>
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '6px',
+              }}>
                 Email address
               </label>
               <input
@@ -66,27 +99,45 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600
-                           bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                           placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0060ac]"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  fontSize: '15px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  background: '#fff',
+                  color: '#111827',
+                }}
               />
             </div>
 
             {error && (
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <p style={{ margin: '0 0 12px', fontSize: '14px', color: '#dc2626' }}>{error}</p>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-[#0060ac] hover:bg-[#004f91] text-white font-semibold
-                         rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                width: '100%',
+                padding: '11px',
+                background: loading ? '#93c5fd' : '#0060ac',
+                color: '#fff',
+                fontSize: '15px',
+                fontWeight: '600',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                marginBottom: '12px',
+              }}
             >
               {loading ? 'Sending…' : 'Send magic link'}
             </button>
 
-            <p className="text-xs text-center text-slate-400">
-              No password needed — we'll email you a sign-in link
+            <p style={{ margin: 0, fontSize: '12px', textAlign: 'center', color: '#9ca3af' }}>
+              No password needed — we&apos;ll email you a sign-in link
             </p>
           </form>
         )}

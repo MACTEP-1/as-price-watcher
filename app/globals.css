@@ -1,7 +1,11 @@
 @import "tailwindcss";
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 :root {
-  --background: #ffffff;
+  --background: #f8fafc;
   --foreground: #0f172a;
 }
 
@@ -13,12 +17,12 @@
 }
 
 body {
+  margin: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* Alaska Airlines brand palette overrides */
-.brand-blue { color: #0060ac; }
-.brand-bg   { background-color: #0060ac; }
+.brand-blue  { color: #0060ac; }
+.brand-bg    { background-color: #0060ac; }
 .brand-green { color: #00a551; }
