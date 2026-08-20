@@ -8,8 +8,6 @@ import type { Watch } from '@/types'
 import type { AlertTrigger } from './alerts'
 import { formatDrop } from './alerts'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const FROM_EMAIL = process.env.ALERT_FROM_EMAIL ?? 'alerts@yourdomain.com'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
@@ -139,6 +137,8 @@ export async function sendAlertEmail(params: {
   const html = buildEmailHtml({ watch, trigger, alertId })
 
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    
     const { error } = await resend.emails.send({
       from: FROM_EMAIL,
       to,
