@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/supabase/server'
-import { getCheapestFare } from '@/lib/amadeus/client'
+import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice, toAlaskaCabin } from '@/lib/alaska/miles'
 import { evaluateAlerts } from '@/lib/alerts'
 import { sendAlertEmail } from '@/lib/email'

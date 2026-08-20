@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCheapestFare } from '@/lib/amadeus/client'
+import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice, toAlaskaCabin } from '@/lib/alaska/miles'
 import type { CabinClass } from '@/types'
 

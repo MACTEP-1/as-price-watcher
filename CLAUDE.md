@@ -24,12 +24,12 @@ Tracks Alaska Airlines flight prices (both **cash fares** and **miles/award pric
 
 ## Data Sources — Important Details
 
-### Cash Prices (Amadeus)
-- Uses Amadeus Flight Offers Search API
-- Prefers AS-operated flights, falls back to any carrier
-- Returns cheapest fare per date, with flight number, duration, stops
-- Free tier: 2000 calls/month — watch usage with multi-date searches (14-day range = 14 calls per search)
-- Sign up: https://developers.amadeus.com (free "Test" environment, switch to Production when ready)
+### Cash Prices (swappable provider)
+- Provider lives in `lib/flights/` — swap by editing ONE line in `lib/flights/index.ts`
+- **Current: Mock** — deterministic fake data, no API key, for development
+- **SerpApi** (serpapi.com) — Google Flights scraper, $50/mo for 5k searches, env var: `SERPAPI_KEY`
+- **Duffel** (duffel.com) — legitimate airline API, free to search, charges per booking only, env var: `DUFFEL_ACCESS_TOKEN`
+- Note: Amadeus self-service portal was decommissioned July 17, 2026 — enterprise only now
 
 ### Miles/Award Prices (Alaska internal API)
 - Scrapes Alaska's internal API at `https://www.alaskaair.com/search/results`
@@ -74,7 +74,12 @@ as-price-watcher/
 │   ├── PriceHistoryChart.tsx   # Full dual-axis Recharts LineChart
 │   └── Nav.tsx                 # Top nav
 ├── lib/
-│   ├── amadeus/client.ts       # Amadeus API client, getCheapestFare()
+│   ├── flights/
+│   │   ├── index.ts            # ← EDIT THIS to swap providers (one line change)
+│   │   ├── types.ts            # Shared FlightPriceProvider interface
+│   │   ├── mock-provider.ts    # Fake data for development
+│   │   ├── serpapi-provider.ts # Google Flights via SerpApi
+│   │   └── duffel-provider.ts  # Duffel airline API
 │   ├── alaska/miles.ts         # Alaska award scraper, getCheapestMilesPrice()
 │   ├── alerts.ts               # evaluateAlerts(), rolling avg logic
 │   ├── email.ts                # Resend email template, sendAlertEmail()
@@ -127,10 +132,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...   # for cron job (bypasses RLS)
 
-# Amadeus — from developers.amadeus.com
-AMADEUS_CLIENT_ID=your_client_id
-AMADEUS_CLIENT_SECRET=your_client_secret
-AMADEUS_ENV=test   # change to "production" when ready
+# Flight prices — uncomment the one matching your provider in lib/flights/index.ts
+# SERPAPI_KEY=...           # serpapi.com
+# DUFFEL_ACCESS_TOKEN=...   # duffel.com
+# (no key needed for mock provider)
 
 # Resend — from resend.com (need verified domain for production)
 RESEND_API_KEY=re_...
