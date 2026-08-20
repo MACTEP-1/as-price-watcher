@@ -72,9 +72,10 @@ export default function PriceHistoryChart({ history }: Props) {
         )}
         <Tooltip
           contentStyle={{ fontSize: 12, borderRadius: 8 }}
-          formatter={(val: number, name: string) =>
-            name === 'Cash' ? [formatCash(val), 'Cash'] : [formatMiles(val), 'Miles']
-          }
+          formatter={(val: unknown, name: unknown) => {
+            const n = typeof val === 'number' ? val : 0
+            return name === 'Cash' ? [formatCash(n), 'Cash'] : [formatMiles(n), 'Miles']
+          }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {hasCash && (

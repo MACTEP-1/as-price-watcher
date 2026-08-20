@@ -35,9 +35,10 @@ export default function PriceSparkline({ history, type, color }: Props) {
         />
         <Tooltip
           contentStyle={{ fontSize: 11, padding: '4px 8px', borderRadius: 6 }}
-          formatter={(val: number) =>
-            type === 'cash' ? formatCash(val) : formatMiles(val)
-          }
+          formatter={(val: unknown) => {
+            const n = typeof val === 'number' ? val : 0
+            return type === 'cash' ? formatCash(n) : formatMiles(n)
+          }}
           labelStyle={{ fontSize: 11, color: '#64748b' }}
         />
       </LineChart>

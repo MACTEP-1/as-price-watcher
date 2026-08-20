@@ -150,7 +150,7 @@ export default function Home() {
     }
   }
 
-  const s: Record<string, React.CSSProperties> = {
+  const s: Record<string, React.CSSProperties | ((...args: any[]) => React.CSSProperties)> = {
     page: {
       minHeight: '100vh',
       background: 'linear-gradient(160deg, #003f7a 0%, #0060ac 45%, #0284c7 100%)',
