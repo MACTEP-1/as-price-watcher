@@ -150,7 +150,7 @@ export default function Home() {
     }
   }
 
-  const s: Record<string, React.CSSProperties | ((...args: any[]) => React.CSSProperties)> = {
+  const s: Record<string, React.CSSProperties> = {
     page: {
       minHeight: '100vh',
       background: 'linear-gradient(160deg, #003f7a 0%, #0060ac 45%, #0284c7 100%)',
@@ -248,32 +248,11 @@ export default function Home() {
       marginTop: '4px',
     },
     pills: { display: 'flex', gap: '8px', flexWrap: 'wrap' as const, marginBottom: '16px' },
-    pill: (active: boolean): React.CSSProperties => ({
-      padding: '5px 12px',
-      borderRadius: '20px',
-      fontSize: '13px',
-      fontWeight: '500',
-      border: `1.5px solid ${active ? '#0060ac' : '#e5e7eb'}`,
-      background: active ? '#eff6ff' : '#fff',
-      color: active ? '#0060ac' : '#6b7280',
-      cursor: 'pointer',
-    }),
     results: {
       maxWidth: '680px',
       margin: '24px auto 0',
       paddingBottom: '48px',
     },
-    resultCard: (isBest: boolean): React.CSSProperties => ({
-      background: '#fff',
-      borderRadius: '14px',
-      padding: '16px 20px',
-      marginBottom: '10px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '16px',
-      boxShadow: isBest ? '0 0 0 2px #0060ac, 0 4px 16px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.08)',
-      position: 'relative' as const,
-    }),
     bestBadge: {
       position: 'absolute' as const,
       top: '-10px',
@@ -286,19 +265,6 @@ export default function Home() {
       borderRadius: '10px',
       letterSpacing: '0.03em',
     },
-    watchBtn: (watching: boolean): React.CSSProperties => ({
-      marginLeft: 'auto',
-      flexShrink: 0,
-      padding: '8px 16px',
-      background: watching ? '#f0fdf4' : '#0060ac',
-      color: watching ? '#16a34a' : '#fff',
-      border: watching ? '1.5px solid #bbf7d0' : 'none',
-      borderRadius: '8px',
-      fontSize: '13px',
-      fontWeight: '600',
-      cursor: watching ? 'default' : 'pointer',
-      whiteSpace: 'nowrap' as const,
-    }),
     overlay: {
       position: 'fixed' as const,
       inset: 0,
@@ -318,6 +284,43 @@ export default function Home() {
       textAlign: 'center' as const,
     },
   }
+
+  const pill = (active: boolean): React.CSSProperties => ({
+    padding: '5px 12px',
+    borderRadius: '20px',
+    fontSize: '13px',
+    fontWeight: '500',
+    border: `1.5px solid ${active ? '#0060ac' : '#e5e7eb'}`,
+    background: active ? '#eff6ff' : '#fff',
+    color: active ? '#0060ac' : '#6b7280',
+    cursor: 'pointer',
+  })
+  
+  const resultCard = (isBest: boolean): React.CSSProperties => ({
+    background: '#fff',
+    borderRadius: '14px',
+    padding: '16px 20px',
+    marginBottom: '10px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    boxShadow: isBest ? '0 0 0 2px #0060ac, 0 4px 16px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.08)',
+    position: 'relative' as const,
+  })
+  
+  const watchBtn = (watching: boolean): React.CSSProperties => ({
+    marginLeft: 'auto',
+    flexShrink: 0,
+    padding: '8px 16px',
+    background: watching ? '#f0fdf4' : '#0060ac',
+    color: watching ? '#16a34a' : '#fff',
+    border: watching ? '1.5px solid #bbf7d0' : 'none',
+    borderRadius: '8px',
+    fontSize: '13px',
+    fontWeight: '600',
+    cursor: watching ? 'default' : 'pointer',
+    whiteSpace: 'nowrap' as const,
+  })
 
   return (
     <div style={s.page}>
@@ -377,7 +380,7 @@ export default function Home() {
                   <button
                     key={r.o + r.d}
                     type="button"
-                    style={s.pill(active)}
+                    style={pill(active)}
                     onClick={() => { setOrigin(r.o); setDestination(r.d) }}
                   >
                     {r.o} → {r.d}
@@ -408,7 +411,7 @@ export default function Home() {
                   <button
                     key={c.value}
                     type="button"
-                    style={{ ...s.pill(cabin === c.value), flex: 1, textAlign: 'center' }}
+                    style={{ ...pill(cabin === c.value), flex: 1, textAlign: 'center' }}
                     onClick={() => setCabin(c.value)}
                   >
                     {c.label}
@@ -438,7 +441,7 @@ export default function Home() {
               const isWatched = watchedDates.has(r.date)
               const isBest = i === 0 && r.cashPrice !== null
               return (
-                <div key={r.date} style={s.resultCard(isBest)}>
+                <div key={r.date} style={resultCard(isBest)}>
                   {isBest && <div style={s.bestBadge}>BEST PRICE</div>}
 
                   {/* Date */}
@@ -472,7 +475,7 @@ export default function Home() {
 
                   {/* Watch button */}
                   <button
-                    style={s.watchBtn(isWatched)}
+                    style={watchBtn(isWatched)}
                     onClick={() => !isWatched && handleWatch(r)}
                     disabled={isWatched}
                   >
