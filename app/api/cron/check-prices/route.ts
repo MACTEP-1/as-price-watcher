@@ -1,11 +1,6 @@
-/**
- * Vercel Cron Job — runs every 4 hours
- *
- * vercel.json config:
- *   { "crons": [{ "path": "/api/cron/check-prices", "schedule": "0 */4 * * *" }] }
- *
- * Protected by CRON_SECRET env var.
- */
+// Vercel Cron Job — runs every 4 hours
+// vercel.json schedule: "0 */4 * * *"
+// Protected by CRON_SECRET env var.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/supabase/server'
