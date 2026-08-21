@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
-import { cn } from '@/lib/utils'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy (Saver / Main)' },
@@ -11,7 +10,6 @@ const CABIN_OPTIONS = [
   { value: 'business', label: 'Business / First' },
 ] as const
 
-// Popular AS airport pairs for quick-fill
 const POPULAR_ROUTES = [
   { o: 'SEA', d: 'LAX', label: 'SEA → LAX' },
   { o: 'SEA', d: 'SFO', label: 'SEA → SFO' },
@@ -21,15 +19,20 @@ const POPULAR_ROUTES = [
   { o: 'PDX', d: 'LAX', label: 'PDX → LAX' },
 ]
 
+const input: React.CSSProperties = {
+  width: '100%', padding: '10px 14px', borderRadius: 10,
+  border: '1.5px solid #e2e8f0', fontSize: 15, color: '#0f172a',
+  background: '#f8fafc', boxSizing: 'border-box', outline: 'none',
+}
+
+const label: React.CSSProperties = {
+  display: 'block', fontSize: 13, fontWeight: 600,
+  color: '#475569', marginBottom: 6,
+}
+
 export default function NewWatchPage() {
   const router = useRouter()
-  const [form, setForm] = useState({
-    origin: '',
-    destination: '',
-    departDate: '',
-    returnDate: '',
-    cabinClass: 'economy',
-  })
+  const [form, setForm] = useState({ origin: '', destination: '', departDate: '', returnDate: '', cabinClass: 'economy' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -41,7 +44,6 @@ export default function NewWatchPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-
     const res = await fetch('/api/watches', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -53,15 +55,9 @@ export default function NewWatchPage() {
         cabinClass: form.cabinClass,
       }),
     })
-
     const data = await res.json()
     setLoading(false)
-
-    if (!res.ok) {
-      setError(data.error ?? 'Something went wrong')
-      return
-    }
-
+    if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
     router.push(`/watches/${data.id}`)
   }
 
@@ -72,129 +68,76 @@ export default function NewWatchPage() {
   return (
     <>
       <Nav />
-      <main className="max-w-lg mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-6">
-          Watch a route
-        </h1>
+      <main style={{ maxWidth: 520, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+        <h1 style={{ margin: '0 0 24px', fontSize: 24, fontWeight: 700, color: '#0f172a' }}>Watch a route</h1>
 
-        {/* Quick-fill popular routes */}
-        <div className="mb-6">
-          <p className="text-xs text-slate-500 mb-2">Popular routes</p>
-          <div className="flex flex-wrap gap-2">
-            {POPULAR_ROUTES.map((r) => (
-              <button
-                key={r.label}
-                type="button"
-                onClick={() => { set('origin', r.o); set('destination', r.d) }}
-                className={cn(
-                  'px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors',
-                  form.origin === r.o && form.destination === r.d
-                    ? 'bg-[#0060ac] text-white border-[#0060ac]'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#0060ac]'
-                )}
-              >
-                {r.label}
-              </button>
-            ))}
+        {/* Popular routes */}
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 12, color: '#94a3b8' }}>Popular routes</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {POPULAR_ROUTES.map((r) => {
+              const active = form.origin === r.o && form.destination === r.d
+              return (
+                <button
+                  key={r.label}
+                  type="button"
+                  onClick={() => { set('origin', r.o); set('destination', r.d) }}
+                  style={{ padding: '5px 12px', fontSize: 12, fontWeight: 500, borderRadius: 8, border: `1.5px solid ${active ? '#0060ac' : '#e2e8f0'}`, background: active ? '#0060ac' : '#fff', color: active ? '#fff' : '#475569', cursor: 'pointer' }}
+                >
+                  {r.label}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Origin / Destination */}
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                From (IATA)
-              </label>
-              <input
-                required
-                maxLength={3}
-                value={form.origin}
-                onChange={(e) => set('origin', e.target.value)}
-                placeholder="SEA"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600
-                           bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                           uppercase font-mono placeholder:normal-case placeholder:font-sans placeholder:text-slate-400
-                           focus:outline-none focus:ring-2 focus:ring-[#0060ac]"
-              />
+              <label style={label}>From (IATA)</label>
+              <input required maxLength={3} value={form.origin} onChange={(e) => set('origin', e.target.value.toUpperCase())} placeholder="SEA" style={input} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                To (IATA)
-              </label>
-              <input
-                required
-                maxLength={3}
-                value={form.destination}
-                onChange={(e) => set('destination', e.target.value)}
-                placeholder="LAX"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600
-                           bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                           uppercase font-mono placeholder:normal-case placeholder:font-sans placeholder:text-slate-400
-                           focus:outline-none focus:ring-2 focus:ring-[#0060ac]"
-              />
+              <label style={label}>To (IATA)</label>
+              <input required maxLength={3} value={form.destination} onChange={(e) => set('destination', e.target.value.toUpperCase())} placeholder="LAX" style={input} />
             </div>
           </div>
 
           {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Depart date
-              </label>
-              <input
-                type="date"
-                required
-                min={minDate}
-                value={form.departDate}
-                onChange={(e) => set('departDate', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600
-                           bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                           focus:outline-none focus:ring-2 focus:ring-[#0060ac]"
-              />
+              <label style={label}>Depart date</label>
+              <input type="date" required min={minDate} value={form.departDate} onChange={(e) => set('departDate', e.target.value)} style={input} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Return date <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <input
-                type="date"
-                min={form.departDate || minDate}
-                value={form.returnDate}
-                onChange={(e) => set('returnDate', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600
-                           bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                           focus:outline-none focus:ring-2 focus:ring-[#0060ac]"
-              />
+              <label style={label}>Return date <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+              <input type="date" min={form.departDate || minDate} value={form.returnDate} onChange={(e) => set('returnDate', e.target.value)} style={input} />
             </div>
           </div>
 
-          {/* Cabin class */}
+          {/* Cabin */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Cabin class
-            </label>
-            <div className="flex gap-2">
-              {CABIN_OPTIONS.map((c) => (
-                <button
-                  key={c.value}
-                  type="button"
-                  onClick={() => set('cabinClass', c.value)}
-                  className={cn(
-                    'flex-1 py-2 px-3 text-xs font-medium rounded-lg border transition-colors text-center',
-                    form.cabinClass === c.value
-                      ? 'bg-[#0060ac] text-white border-[#0060ac]'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600'
-                  )}
-                >
-                  {c.label}
-                </button>
-              ))}
+            <label style={label}>Cabin class</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {CABIN_OPTIONS.map((c) => {
+                const active = form.cabinClass === c.value
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => set('cabinClass', c.value)}
+                    style={{ flex: 1, padding: '8px 4px', fontSize: 12, fontWeight: 500, borderRadius: 8, border: `1.5px solid ${active ? '#0060ac' : '#e2e8f0'}`, background: active ? '#0060ac' : '#fff', color: active ? '#fff' : '#475569', cursor: 'pointer', textAlign: 'center' }}
+                  >
+                    {c.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg">
+            <div style={{ padding: '10px 14px', background: '#fef2f2', color: '#dc2626', fontSize: 14, borderRadius: 8 }}>
               {error}
             </div>
           )}
@@ -202,17 +145,9 @@ export default function NewWatchPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-[#0060ac] hover:bg-[#004f91] text-white font-semibold
-                       rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ width: '100%', padding: '13px', background: '#0060ac', color: '#fff', fontSize: 16, fontWeight: 700, border: 'none', borderRadius: 12, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}
           >
             {loading ? 'Creating watch…' : 'Start watching'}
           </button>
 
-          <p className="text-xs text-center text-slate-400">
-            Prices are checked every 4 hours. You'll get an email when the price drops ≥10% or hits a new low.
-          </p>
-        </form>
-      </main>
-    </>
-  )
-}
+          <p style={{ margin: 0, fontSize: 12,

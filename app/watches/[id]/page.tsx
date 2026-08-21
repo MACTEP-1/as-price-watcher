@@ -4,35 +4,27 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, cn } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange } from '@/lib/utils'
 
 export const revalidate = 0
 
-export default async function WatchDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+const card: React.CSSProperties = {
+  background: '#fff', borderRadius: 16, padding: 20,
+  border: '1px solid #f1f5f9', marginBottom: 16,
+}
+
+export default async function WatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: watch } = await supabase
-    .from('watches')
-    .select('*')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .single()
-
+  const { data: watch } = await supabase.from('watches').select('*').eq('id', id).eq('user_id', user.id).single()
   if (!watch) notFound()
 
   const { data: history } = await supabase
-    .from('price_checks')
-    .select('*')
-    .eq('watch_id', id)
-    .order('checked_at', { ascending: true })
-    .limit(90)
+    .from('price_checks').select('*').eq('watch_id', id)
+    .order('checked_at', { ascending: true }).limit(90)
 
   const checks = (history ?? []) as PriceCheck[]
   const latest = checks[checks.length - 1]
@@ -41,85 +33,67 @@ export default async function WatchDetailPage({
   const cashChange = pctChange(latest?.cash_price ?? null, prev?.cash_price ?? null)
   const milesChange = pctChange(latest?.miles_price ?? null, prev?.miles_price ?? null)
 
-  // Alerts for this watch
   const { data: alerts } = await supabase
-    .from('alerts')
-    .select('*')
-    .eq('watch_id', id)
-    .order('triggered_at', { ascending: false })
-    .limit(10)
+    .from('alerts').select('*').eq('watch_id', id)
+    .order('triggered_at', { ascending: false }).limit(10)
+
+  const cashPrices = checks.map(c => c.cash_price).filter((p): p is number => p !== null)
+  const milesPrices = checks.map(c => c.miles_price).filter((p): p is number => p !== null)
 
   return (
     <>
       <Nav />
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        {/* Back */}
-        <Link
-          href="/dashboard"
-          className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1 mb-6"
-        >
+      <main style={{ maxWidth: 768, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+
+        <Link href="/dashboard" style={{ fontSize: 14, color: '#64748b', textDecoration: 'none', display: 'inline-block', marginBottom: 24 }}>
           ← All watches
         </Link>
 
         {/* Route header */}
-        <div className="flex items-start justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              {watch.origin} → {watch.destination}
-            </h1>
-            <p className="mt-1 text-slate-500">
-              {formatDate(watch.depart_date)}
-              {watch.return_date && ` · return ${formatDate(watch.return_date)}`}
-              {' · '}
-              <span className="capitalize">{watch.cabin_class.replace('_', ' ')}</span>
-            </p>
-          </div>
+        <div style={{ marginBottom: 32 }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: '#0f172a' }}>
+            {watch.origin} → {watch.destination}
+          </h1>
+          <p style={{ margin: 0, fontSize: 15, color: '#64748b' }}>
+            {formatDate(watch.depart_date)}
+            {watch.return_date && ` · return ${formatDate(watch.return_date)}`}
+            {' · '}
+            <span style={{ textTransform: 'capitalize' }}>{watch.cabin_class.replace('_', ' ')}</span>
+          </p>
         </div>
 
         {/* Current price cards */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          {/* Cash */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Cash price</p>
-            <p className="text-3xl font-bold text-[#0060ac]">
-              {formatCash(latest?.cash_price ?? null)}
-            </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div style={card}>
+            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cash price</p>
+            <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: '#0060ac' }}>{formatCash(latest?.cash_price ?? null)}</p>
             {cashChange !== null && (
-              <p className={cn(
-                'text-sm font-medium mt-1',
-                cashChange < 0 ? 'text-green-600' : 'text-red-500'
-              )}>
+              <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: cashChange < 0 ? '#16a34a' : '#ef4444' }}>
                 {formatPctChange(cashChange)} since last check
               </p>
             )}
             {latest?.flight_number && (
-              <p className="text-xs text-slate-400 mt-1">Best: {latest.flight_number}</p>
+              <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>Best: {latest.flight_number}</p>
             )}
           </div>
 
-          {/* Miles */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Miles price</p>
-            <p className="text-3xl font-bold text-[#00a551]">
-              {formatMiles(latest?.miles_price ?? null)}
-            </p>
+          <div style={card}>
+            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Miles price</p>
+            <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: '#00a551' }}>{formatMiles(latest?.miles_price ?? null)}</p>
             {milesChange !== null && (
-              <p className={cn(
-                'text-sm font-medium mt-1',
-                milesChange < 0 ? 'text-green-600' : 'text-red-500'
-              )}>
+              <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: milesChange < 0 ? '#16a34a' : '#ef4444' }}>
                 {formatPctChange(milesChange)} since last check
               </p>
             )}
             {latest?.miles_price === null && (
-              <p className="text-xs text-slate-400 mt-1">Award pricing pending</p>
+              <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>Award pricing pending</p>
             )}
           </div>
         </div>
 
         {/* Price history chart */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 mb-6">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
+        <div style={card}>
+          <h2 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#334155' }}>
             Price history ({checks.length} checks)
           </h2>
           <PriceHistoryChart history={checks} />
@@ -127,71 +101,59 @@ export default async function WatchDetailPage({
 
         {/* Stats */}
         {checks.length >= 2 && (
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 mb-6">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">Stats</h2>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              {/* Cash stats */}
-              {(() => {
-                const cashPrices = checks.map(c => c.cash_price).filter((p): p is number => p !== null)
-                if (cashPrices.length === 0) return null
-                return <>
-                  <div>
-                    <p className="text-xs text-slate-400">Cash low</p>
-                    <p className="text-lg font-bold text-[#0060ac] mt-0.5">{formatCash(Math.min(...cashPrices))}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Cash avg</p>
-                    <p className="text-lg font-bold text-slate-700 dark:text-slate-300 mt-0.5">
-                      {formatCash(cashPrices.reduce((a, b) => a + b, 0) / cashPrices.length)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Cash high</p>
-                    <p className="text-lg font-bold text-slate-500 mt-0.5">{formatCash(Math.max(...cashPrices))}</p>
-                  </div>
-                </>
-              })()}
-            </div>
-            <div className="grid grid-cols-3 gap-4 text-center mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-              {(() => {
-                const milesPrices = checks.map(c => c.miles_price).filter((p): p is number => p !== null)
-                if (milesPrices.length === 0) return <p className="col-span-3 text-xs text-slate-400">Miles history not yet available</p>
-                return <>
-                  <div>
-                    <p className="text-xs text-slate-400">Miles low</p>
-                    <p className="text-lg font-bold text-[#00a551] mt-0.5">{formatMiles(Math.min(...milesPrices))}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Miles avg</p>
-                    <p className="text-lg font-bold text-slate-700 dark:text-slate-300 mt-0.5">
-                      {formatMiles(Math.round(milesPrices.reduce((a, b) => a + b, 0) / milesPrices.length))}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Miles high</p>
-                    <p className="text-lg font-bold text-slate-500 mt-0.5">{formatMiles(Math.max(...milesPrices))}</p>
-                  </div>
-                </>
-              })()}
-            </div>
+          <div style={card}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#334155' }}>Stats</h2>
+            {cashPrices.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, textAlign: 'center', marginBottom: milesPrices.length > 0 ? 16 : 0 }}>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#94a3b8' }}>Cash low</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0060ac' }}>{formatCash(Math.min(...cashPrices))}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#94a3b8' }}>Cash avg</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#334155' }}>{formatCash(Math.round(cashPrices.reduce((a, b) => a + b, 0) / cashPrices.length))}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#94a3b8' }}>Cash high</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#64748b' }}>{formatCash(Math.max(...cashPrices))}</p>
+                </div>
+              </div>
+            )}
+            {milesPrices.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, textAlign: 'center', paddingTop: cashPrices.length > 0 ? 16 : 0, borderTop: cashPrices.length > 0 ? '1px solid #f1f5f9' : 'none' }}>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#94a3b8' }}>Miles low</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#00a551' }}>{formatMiles(Math.min(...milesPrices))}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#94a3b8' }}>Miles avg</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#334155' }}>{formatMiles(Math.round(milesPrices.reduce((a, b) => a + b, 0) / milesPrices.length))}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#94a3b8' }}>Miles high</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#64748b' }}>{formatMiles(Math.max(...milesPrices))}</p>
+                </div>
+              </div>
+            ) : (
+              <p style={{ margin: 0, fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>Miles history not yet available</p>
+            )}
           </div>
         )}
 
         {/* Alert history */}
         {(alerts ?? []).length > 0 && (
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">Alert history</h2>
-            <div className="space-y-3">
+          <div style={card}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#334155' }}>Alert history</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {(alerts ?? []).map((a: any) => (
-                <div key={a.id} className="flex items-start gap-3 text-sm">
-                  <span className="text-lg">{a.alert_type === 'new_low' ? '🏆' : '📉'}</span>
+                <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <span style={{ fontSize: 18 }}>{a.alert_type === 'new_low' ? '🏆' : '📉'}</span>
                   <div>
-                    <p className="font-medium text-slate-800 dark:text-slate-200">
+                    <p style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 500, color: '#1e293b' }}>
                       {a.alert_type === 'new_low' ? 'New all-time low' : 'Price dropped ≥10%'}
                     </p>
-                    <p className="text-slate-500 text-xs">
-                      {new Date(a.triggered_at).toLocaleString()} ·{' '}
-                      Cash: {formatCash(a.cash_price)} · Miles: {formatMiles(a.miles_price)}
+                    <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                      {new Date(a.triggered_at).toLocaleString()} · Cash: {formatCash(a.cash_price)} · Miles: {formatMiles(a.miles_price)}
                     </p>
                   </div>
                 </div>
