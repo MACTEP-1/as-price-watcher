@@ -12,7 +12,6 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Fetch watches + last 14 price checks each
   const { data: watches } = await supabase
     .from('watches')
     .select('*')
@@ -49,33 +48,31 @@ export default async function DashboardPage() {
   return (
     <>
       <Nav />
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-            Your watches
-          </h1>
+      <main style={{ maxWidth: 896, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0f172a' }}>Your watches</h1>
           <Link
             href="/watches/new"
-            className="px-4 py-2 bg-[#0060ac] text-white text-sm font-semibold rounded-lg hover:bg-[#004f91] transition-colors"
+            style={{ padding: '8px 16px', background: '#0060ac', color: '#fff', fontSize: 14, fontWeight: 600, borderRadius: 8, textDecoration: 'none' }}
           >
             + New watch
           </Link>
         </div>
 
         {enriched.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="text-5xl mb-4">✈️</div>
-            <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-300">No watches yet</h2>
-            <p className="mt-1 text-slate-500 text-sm">Add a route to start tracking prices</p>
+          <div style={{ textAlign: 'center', padding: '80px 0' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✈️</div>
+            <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600, color: '#334155' }}>No watches yet</h2>
+            <p style={{ margin: '0 0 24px', fontSize: 14, color: '#64748b' }}>Add a route to start tracking prices</p>
             <Link
               href="/watches/new"
-              className="mt-6 inline-block px-6 py-2.5 bg-[#0060ac] text-white font-semibold rounded-lg hover:bg-[#004f91] transition-colors"
+              style={{ display: 'inline-block', padding: '10px 24px', background: '#0060ac', color: '#fff', fontWeight: 600, borderRadius: 8, textDecoration: 'none' }}
             >
               Watch a route
             </Link>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
             {enriched.map((w) => (
               <WatchCard key={w.id} watch={w} />
             ))}
