@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCheapestFare } from '@/lib/flights'
-import { getCheapestMilesPrice, toAlaskaCabin } from '@/lib/alaska/miles'
+import { getCheapestMilesPrice } from '@/lib/miles'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import type { CabinClass } from '@/types'
+
+/**
+ * ⚠️  QUOTA WARNING
+ * Every date in the range costs one SerpApi search. SerpApi's free tier is
+ * 250 searches/month TOTAL — shared with the cron job. An unauthenticated,
+ * uncapped version of this endpoint would drain a month's quota in a couple
+ * of page loads, so it now (a) requires a signed-in user and (b) caps the
+ * range at SEARCH_MAX_DAYS (default 5).
+ */
+const MAX_DAYS = Math.max(1, parseInt(process.env.SEARCH_MAX_DAYS ?? '5', 10))
 
 export interface SearchResult {
   date: string
@@ -14,6 +25,16 @@ export interface SearchResult {
 }
 
 export async function POST(req: NextRequest) {
+  // Searches cost real API quota — require a signed-in user.
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Sign in to search flights' },
+      { status: 401 }
+    )
+  }
+
   const body = await req.json()
   const { origin, destination, startDate, endDate, cabinClass, returnDate } = body
 
@@ -26,10 +47,10 @@ export async function POST(req: NextRequest) {
   const start = new Date(startDate + 'T12:00:00')
   const end = endDate ? new Date(endDate + 'T12:00:00') : start
 
-  // Cap at 14 days to avoid hammering the API
+  // Cap the range — each day is one paid API search.
   const diffDays = Math.min(
-    Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1,
-    14
+    Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1),
+    MAX_DAYS
   )
 
   for (let i = 0; i < diffDays; i++) {
@@ -54,7 +75,7 @@ export async function POST(req: NextRequest) {
             origin,
             destination,
             departDate: date,
-            cabin: toAlaskaCabin(cabinClass),
+            cabinClass: cabinClass as CabinClass,
           }),
         ])
 

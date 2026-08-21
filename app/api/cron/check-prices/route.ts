@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/supabase/server'
 import { getCheapestFare } from '@/lib/flights'
-import { getCheapestMilesPrice, toAlaskaCabin } from '@/lib/alaska/miles'
+import { getCheapestMilesPrice } from '@/lib/miles'
 import { evaluateAlerts } from '@/lib/alerts'
 import { sendAlertEmail } from '@/lib/email'
 import type { Watch, PriceCheck } from '@/types'
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
           origin: watch.origin,
           destination: watch.destination,
           departDate: watch.depart_date,
-          cabin: toAlaskaCabin(watch.cabin_class),
+          cabinClass: watch.cabin_class,
         }),
       ])
 
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
         milesResult.status === 'fulfilled' ? milesResult.value : null
 
       if (cashResult.status === 'rejected') {
-        console.error(`[cron] Amadeus error for watch ${watch.id}:`, cashResult.reason)
+        console.error(`[cron] Cash price error for watch ${watch.id}:`, cashResult.reason)
       }
       if (milesResult.status === 'rejected') {
         console.error(`[cron] Miles error for watch ${watch.id}:`, milesResult.reason)
