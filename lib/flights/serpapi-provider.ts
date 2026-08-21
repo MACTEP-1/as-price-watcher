@@ -58,6 +58,38 @@ function isAlaska(itin: SerpItinerary): boolean {
   )
 }
 
+/**
+ * Zero-padded sort key so "AS281" sorts before "AS1000" (a plain string
+ * compare would put "AS1000" first).
+ */
+function flightKey(itin: SerpItinerary): string {
+  const raw = itin.flights?.[0]?.flight_number?.replace(/\s+/g, '') ?? ''
+  const match = raw.match(/^([A-Z0-9]{2})(\d+)$/i)
+  return match ? `${match[1].toUpperCase()}${match[2].padStart(5, '0')}` : raw
+}
+
+/**
+ * Deterministic ordering. Google Flights routinely returns several Alaska
+ * nonstops in the same fare bucket, and SerpApi's result order is not stable
+ * between calls — so picking "the first cheapest" made the stored
+ * flight_number flip between equal-priced flights while the price never
+ * moved. Tie-break explicitly: cheapest → fewest stops → shortest → lowest
+ * flight number.
+ */
+function compareItineraries(a: SerpItinerary, b: SerpItinerary): number {
+  if (a.price !== b.price) return a.price! - b.price!
+
+  const aLegs = a.flights?.length ?? Number.MAX_SAFE_INTEGER
+  const bLegs = b.flights?.length ?? Number.MAX_SAFE_INTEGER
+  if (aLegs !== bLegs) return aLegs - bLegs
+
+  const aDur = a.total_duration ?? Number.MAX_SAFE_INTEGER
+  const bDur = b.total_duration ?? Number.MAX_SAFE_INTEGER
+  if (aDur !== bDur) return aDur - bDur
+
+  return flightKey(a).localeCompare(flightKey(b))
+}
+
 export class SerpApiFlightProvider implements FlightPriceProvider {
   async getCheapestFare(params: FlightSearchParams): Promise<CashFareResult | null> {
     const apiKey = process.env.SERPAPI_KEY
@@ -121,7 +153,14 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     }
 
     const candidates = alaska.length > 0 ? alaska : all
-    const best = candidates.reduce((a, b) => (a.price! <= b.price! ? a : b))
+    // const best = candidates.reduce((a, b) => (a.price! <= b.price! ? a : b))
+    
+    // Sort a COPY — Array.sort mutates in place, and `candidates` is a live
+    // reference to `alaska` or `all`. See compareItineraries above for why
+    // this is a full sort rather than a cheaper "min by price" reduce:
+    // ties have to break the same way on every call, or the stored
+    // flight_number churns between equal-priced flights.
+    const best = [...candidates].sort(compareItineraries)[0]
 
     const legs = best.flights ?? []
     const firstLeg = legs[0]
