@@ -1,22 +1,26 @@
 # AS Price Watch
 
-Track Alaska Airlines flight prices — cash fares (via Amadeus) and award miles (via Alaska's internal API) — and get email alerts when prices drop without setting a target price.
+Track Alaska Airlines flight prices — cash fares via Google Flights, award miles via seats.aero — and get email alerts when prices drop, without setting a target price.
 
 ## How it works
 
 - Add a route watch (e.g. SEA → LAX, Oct 12, Economy)
-- Every 4 hours the cron job fetches the current best cash fare from Amadeus and the miles price from Alaska's site
+- Every 4 hours a cron job fetches the current best Alaska fare and, if miles tracking is enabled, the lowest saver award price
 - You get an email alert when the price drops ≥10% from the 7-day rolling average, or hits a new all-time low for that route
 - The detail page shows cash and miles history on the same chart with low/avg/high stats
 
-## Stack (all free tiers)
+## Stack
 
-| Service | Purpose | Free tier |
-|---------|---------|-----------|
-| [Vercel](https://vercel.com) | Next.js hosting + cron jobs | Hobby |
-| [Supabase](https://supabase.com) | Postgres DB + Auth | 500 MB, 50k MAU |
-| [Amadeus](https://developers.amadeus.com) | Cash flight prices | 2,000 API calls/mo (test) |
-| [Resend](https://resend.com) | Email alerts | 3,000 emails/mo |
+| Service | Purpose | Tier |
+|---------|---------|------|
+| [Vercel](https://vercel.com) | Next.js hosting | Hobby (free) |
+| [cron-job.org](https://cron-job.org) | 4-hourly scheduler | Free |
+| [Supabase](https://supabase.com) | Postgres DB + Auth | Free — 500 MB, 50k MAU |
+| [SerpApi](https://serpapi.com) | Cash flight prices | Free — 250 searches/mo |
+| [seats.aero](https://seats.aero) | Award/miles prices | **Optional** — Pro ~$9.99/mo |
+| [Resend](https://resend.com) | Email alerts | Free — 3,000 emails/mo |
+
+Everything except seats.aero runs on a free tier. Miles tracking is opt-in: without a seats.aero key the app works normally and `miles_price` stays null.
 
 ---
 
@@ -28,22 +32,46 @@ Track Alaska Airlines flight prices — cash fares (via Amadeus) and award miles
 2. Go to **SQL Editor** and run the contents of `supabase/schema.sql`
 3. Copy your **Project URL**, **anon key**, and **service role key** from Settings → API
 
-### 2. Amadeus
+> Use the **legacy JWT** keys (long `eyJ...` strings), not the newer
+> `sb_publishable_...` / `sb_secret_...` format — `@supabase/ssr` is wired for
+> the legacy shape here.
 
-1. Sign up at [developers.amadeus.com](https://developers.amadeus.com)
-2. Create a new app → get Client ID and Client Secret
-3. Start on the **test** environment (sandbox data). When ready, apply for production access.
+### 2. SerpApi (cash prices — required)
 
-> ⚠️ The Amadeus test environment returns synthetic flight data, not real Alaska prices. The app still works end-to-end for development; switch `AMADEUS_ENV=production` when you go live.
+1. Sign up at [serpapi.com](https://serpapi.com) — free tier, no card
+2. Copy your private API key into `SERPAPI_KEY`
 
-### 3. Resend
+**Watch your quota.** The free tier is 250 searches/month, shared between the
+cron job and on-site search. One search = one date, per active watch:
+
+| Cron interval | per day | per month | watches on free tier |
+|---|---|---|---|
+| every 4h | 6 | ~180 | 1 |
+| every 6h | 4 | ~120 | 2 |
+| every 12h | 2 | ~60 | 4 |
+
+Adjust the schedule in cron-job.org when you add watches, or move to SerpApi
+Starter ($25/mo, 1,000 searches).
+
+### 3. seats.aero (miles prices — optional)
+
+1. Subscribe to [seats.aero](https://seats.aero) Pro (~$9.99/mo)
+2. Settings → API → generate a key → `SEATS_AERO_KEY`
+
+Skip this entirely if you only care about cash. No code change is needed
+either way — the provider self-disables when the key is absent.
+
+Caveats: not every Pro account has API access enabled, and the API is not
+available in all countries. Pro keys allow ~1,000 calls/day.
+
+### 4. Resend
 
 1. Sign up at [resend.com](https://resend.com)
 2. Add and verify your sending domain
 3. Create an API key
 4. Set `ALERT_FROM_EMAIL` to an address at your verified domain
 
-### 4. Environment variables
+### 5. Environment variables
 
 Copy `.env.example` to `.env.local` and fill in all values:
 
@@ -51,7 +79,7 @@ Copy `.env.example` to `.env.local` and fill in all values:
 cp .env.example .env.local
 ```
 
-### 5. Run locally
+### 6. Run locally
 
 ```bash
 npm install
@@ -60,25 +88,93 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### 6. Deploy to Vercel
+### 7. Deploy to Vercel
 
 ```bash
 npx vercel
 ```
 
-Set all environment variables in the Vercel dashboard (Settings → Environment Variables). The cron job is automatically configured via `vercel.json` — it runs at `:00` every 4 hours UTC.
+Set all environment variables in the Vercel dashboard (Settings → Environment
+Variables), for **Production and Preview**.
 
-Vercel crons require the **Hobby** plan (free). The cron calls `GET /api/cron/check-prices` with an `Authorization: Bearer <CRON_SECRET>` header.
+### 8. Schedule the cron
+
+Vercel's Hobby plan caps cron jobs at **once daily**, so the 4-hourly schedule
+runs from an external caller instead:
+
+1. Create a job at [cron-job.org](https://cron-job.org)
+2. URL: `https://<your-app>.vercel.app/api/cron/check-prices`
+3. Schedule: every 4 hours (`0 */4 * * *`)
+4. Under **Advanced**, add header `Authorization: Bearer <CRON_SECRET>`
+
+`vercel.json` still carries a cron entry; it is harmless but only fires daily
+on Hobby.
 
 ---
 
-## Miles pricing note
+## Data sources — and the ones that didn't work
 
-Alaska Airlines doesn't expose a public award pricing API. The miles fetcher (`lib/alaska/miles.ts`) replicates the internal API calls their website makes. This works well but is fragile — if Alaska redesigns their search, `miles_price` will come back null while cash prices continue working normally. The cron job logs a warning and continues without crashing.
+### Cash: SerpApi (Google Flights)
+
+`lib/flights/serpapi-provider.ts`, selected in `lib/flights/index.ts`.
+
+Prefers Alaska-marketed flights — the carrier is parsed from `flight_number`
+("AS 673" → `AS`) — and falls back to the cheapest fare on any carrier unless
+`SERPAPI_STRICT_AS=true`.
+
+For round trips, SerpApi's first response contains **outbound legs only**;
+the return legs require a second call with `departure_token`. `price` is
+already the full round-trip fare, so that second call is skipped to conserve
+quota. Stops and duration therefore describe the outbound journey.
+
+### Miles: seats.aero
+
+`lib/miles/seats-aero-provider.ts`, selected in `lib/miles/index.ts`.
+
+seats.aero crawls ~28 mileage programs' award engines on a schedule and serves
+results from its own cache. `sources=alaska` is Alaska Mileage Plan / Atmos
+Rewards. A price is returned only when **saver award space exists** in the
+requested cabin — a dash in the UI means no space, not a failure.
+
+### Rejected: Amadeus
+
+Its free tier is the **test** environment, which serves synthetic data rather
+than real Alaska fares. Production access is paid and gated.
+`lib/amadeus/client.ts` remains for reference and is imported nowhere.
+
+### Rejected: Duffel
+
+Alaska *is* available (via Travelport GDS), but test mode hits airline
+sandboxes — the same synthetic-data dead end — and the fallback fake carrier
+("Duffel Airways", IATA `ZZ`) has explicitly unrealistic prices. Searching is
+also not free: the allowance is 1,500 searches *per confirmed booking*, so at
+zero bookings it costs $0.005/search, and live mode requires onboarding as a
+travel seller.
+
+### Retired: hand-rolled Alaska scraper
+
+`lib/alaska/miles.ts` POSTed to `https://www.alaskaair.com/search/api/award-pricing`,
+described in its own comments as reverse-engineered from DevTools. That
+endpoint could not be verified to exist and the payload shape appears
+invented. It swallowed every error and returned null, so miles silently never
+populated. **Deleted** — do not reinstate without a real browser network trace.
+
+---
+
+## Search endpoint is authenticated
+
+`POST /api/search` requires a signed-in Supabase user and caps the date range
+at `SEARCH_MAX_DAYS` (default 5). Each date in a range costs one real SerpApi
+search, so an open, uncapped endpoint could drain a month of free quota in a
+couple of page loads.
+
+If you move to a paid SerpApi plan, add per-user rate limiting (e.g. Upstash
+Redis) before making it anonymous again.
 
 ## PWA / mobile install
 
-The app ships a `manifest.json` so Chrome and Safari will offer an "Add to Home Screen" option. On iOS: Safari → Share → Add to Home Screen.
+The app ships a `manifest.json` so Chrome and Safari will offer an "Add to Home
+Screen" option. On iOS: Safari → Share → Add to Home Screen.
 
 ---
 
@@ -88,7 +184,8 @@ The app ships a `manifest.json` so Chrome and Safari will offer an "Add to Home 
 app/
   api/
     auth/callback/     — Supabase magic-link callback
-    cron/check-prices/ — Vercel cron job (price fetch + alert logic)
+    cron/check-prices/ — Cron job (price fetch + alert logic)
+    search/            — Multi-date search (auth required, quota-capped)
     watches/           — CRUD endpoints
     alerts/unsubscribe/— One-click email unsubscribe
   dashboard/           — Watch list page
@@ -98,18 +195,34 @@ app/
     [id]/              — Watch detail + price history chart
 components/
   Nav.tsx
-  WatchCard.tsx        — Dashboard card with sparklines
-  PriceSparkline.tsx   — Mini chart for dashboard cards
-  PriceHistoryChart.tsx— Full chart for detail page
+  WatchCard.tsx         — Dashboard card with sparklines
+  PriceSparkline.tsx    — Mini chart for dashboard cards
+  PriceHistoryChart.tsx — Full chart for detail page
 lib/
-  amadeus/client.ts   — Amadeus API (cash prices)
-  alaska/miles.ts     — Alaska internal API (miles prices)
-  alerts.ts           — Alert trigger logic
-  email.ts            — Resend email template
-  supabase/           — Server + browser Supabase clients
-  utils.ts            — Formatting helpers
+  flights/              — CASH prices, swappable provider
+    index.ts            — ← the one place to switch provider
+    types.ts            — FlightPriceProvider interface
+    serpapi-provider.ts — ACTIVE
+    mock-provider.ts    — fake data, no key needed
+    duffel-provider.ts  — stub, see "Rejected" above
+  miles/                — AWARD prices, swappable provider
+    index.ts            — ← the one place to switch provider
+    types.ts            — MilesPriceProvider interface
+    seats-aero-provider.ts — ACTIVE (no-ops without a key)
+  amadeus/client.ts     — UNUSED, reference only
+  alerts.ts             — Alert trigger logic
+  email.ts              — Resend email template
+  supabase/             — Server + browser Supabase clients
+  utils.ts              — Formatting helpers
 supabase/
-  schema.sql          — Run once in Supabase SQL editor
+  schema.sql            — Run once in Supabase SQL editor
+docs/                   — Design notes and provider decisions
 types/index.ts
-vercel.json           — Cron schedule
+vercel.json             — Daily cron fallback (Hobby limit)
 ```
+
+## Styling note
+
+Tailwind v4 did not apply reliably under Next.js 16 in production, so all
+layout uses React inline styles. Keep new components consistent with that —
+don't reintroduce Tailwind classes for layout.

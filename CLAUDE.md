@@ -10,8 +10,8 @@ Tracks Alaska Airlines flight prices (both **cash fares** and **miles/award pric
 |---|---|---|
 | Framework | Next.js 16 (App Router) | File-based routing, server components, API routes |
 | Database + Auth | Supabase (free tier) | Postgres + magic link / OTP auth |
-| Cash prices | Amadeus Flight Offers Search API | Free tier: 2000 calls/month |
-| Miles prices | Alaska internal award API scraper | Unofficial; may break if Alaska changes their API |
+| Cash prices | SerpApi (Google Flights engine) | Free tier: 250 searches/month |
+| Miles prices | seats.aero Partner API | Needs seats.aero Pro (~$9.99/mo); optional |
 | Email | Resend | Free tier: 100 emails/day |
 | Hosting | Vercel (free tier) | Cron jobs every 4 hours |
 | Styling | Tailwind CSS v4 + inline styles | Tailwind v4 was unreliable with Next 16, so critical layout uses inline styles |
@@ -20,28 +20,58 @@ Tracks Alaska Airlines flight prices (both **cash fares** and **miles/award pric
 
 ## UX Philosophy
 
-**Search-first, login-optional.** Like Google Flights — anyone can search and see results without an account. Login (magic link email) is only required when saving a price alert watch. This lowers friction for casual users.
+**Search-first, login-required-to-search.** The homepage still leads with search, but `/api/search` now requires a signed-in user. Reason: every date in a search range costs one real SerpApi call against a 250/month quota, and an open endpoint could be drained by anyone in two page loads. If you move to a paid SerpApi plan plus rate limiting, this can go back to being anonymous.
 
 ## Data Sources — Important Details
 
-### Cash Prices (swappable provider)
-- Provider lives in `lib/flights/` — swap by editing ONE line in `lib/flights/index.ts`
-- **Current: Mock** — deterministic fake data, no API key, for development
-- **SerpApi** (serpapi.com) — Google Flights scraper, $50/mo for 5k searches, env var: `SERPAPI_KEY`
-- **Duffel** (duffel.com) — legitimate airline API, free to search, charges per booking only, env var: `DUFFEL_ACCESS_TOKEN`
-- Note: Amadeus self-service portal was decommissioned July 17, 2026 — enterprise only now
+### Cash Prices (SerpApi → Google Flights)
+- `lib/flights/serpapi-provider.ts`, selected in `lib/flights/index.ts`
+- Prefers AS-marketed flights (carrier prefix parsed from `flight_number`),
+  falls back to the cheapest on any carrier unless `SERPAPI_STRICT_AS=true`
+- Free tier: **250 searches/month**, shared between the cron and on-site search
+- Round trips: SerpApi returns outbound legs only in `flights[]`, but `price`
+  is already the full round-trip fare. Stops/duration therefore describe the
+  outbound journey. Fetching return legs needs a second call
+  (`departure_token`) and would double quota use — deliberately skipped.
 
-### Miles/Award Prices (Alaska internal API)
-- Scrapes Alaska's internal API at `https://www.alaskaair.com/search/results`
-- **Unofficial** — not documented, may break without warning
-- 8-second timeout; gracefully returns null on failure
-- Maps cabin classes: economy→coach, business→first
+Quota math — 1 search per active watch per cron tick:
 
-### Why Not Use a Paid Data Provider?
-- seats.aero, Skyscanner API, etc. cost money
-- Google Flights data is not publicly licensable
-- Amadeus free tier covers our use case for personal use
-- Award data from Alaska's own app is the most accurate source for their miles prices
+| Cron interval | per day | per month | watches on free tier |
+|---|---|---|---|
+| every 4h | 6 | ~180 | 1 |
+| every 6h | 4 | ~120 | 2 |
+| every 12h | 2 | ~60 | 4 |
+
+### Miles/Award Prices (seats.aero)
+- `lib/miles/seats-aero-provider.ts`, selected in `lib/miles/index.ts`
+- **Self-disables when `SEATS_AERO_KEY` is unset** — cash tracking works fine
+  without it and miles simply stay null. Subscribing needs no code change.
+- `GET https://seats.aero/partnerapi/search`, header `Partner-Authorization`
+- `sources=alaska` is Alaska Mileage Plan / Atmos Rewards
+- Returns a mileage cost only when **saver award space exists** in the
+  requested cabin. No space → null → UI shows a dash. That is correct, not a bug.
+- Pro subscription ~$9.99/mo, ~1,000 calls/day. Not every Pro account gets API
+  access enabled, and the API is geo-restricted in some countries.
+
+### Rejected Providers — do not revisit without reading this
+
+**Amadeus.** Its free tier is the *test* environment, which serves synthetic
+data, not real Alaska fares. Production is paid and gated. `lib/amadeus/client.ts`
+survives for reference only and is imported nowhere.
+
+**Duffel.** Alaska *is* available (via Travelport GDS), but test mode hits
+airline sandboxes — the same synthetic-data dead end — and their fallback fake
+carrier ("Duffel Airways", IATA `ZZ`) has explicitly unrealistic prices.
+Searching is also not free: the allowance is 1,500 searches *per confirmed
+booking*, so with zero bookings it is $0.005/search, and live mode requires
+onboarding as a travel seller.
+
+**The old hand-rolled Alaska scraper.** `lib/alaska/miles.ts` POSTed to
+`https://www.alaskaair.com/search/api/award-pricing`, described in its own
+comments as reverse-engineered. That endpoint could not be verified to exist
+and the payload shape appears invented. It swallowed every error and returned
+null, so miles silently never populated. **Deleted.** Do not reinstate without
+a real browser network trace.
 
 ## File Structure
 
@@ -74,13 +104,17 @@ as-price-watcher/
 │   ├── PriceHistoryChart.tsx   # Full dual-axis Recharts LineChart
 │   └── Nav.tsx                 # Top nav
 ├── lib/
-│   ├── flights/
-│   │   ├── index.ts            # ← EDIT THIS to swap providers (one line change)
-│   │   ├── types.ts            # Shared FlightPriceProvider interface
-│   │   ├── mock-provider.ts    # Fake data for development
-│   │   ├── serpapi-provider.ts # Google Flights via SerpApi
-│   │   └── duffel-provider.ts  # Duffel airline API
-│   ├── alaska/miles.ts         # Alaska award scraper, getCheapestMilesPrice()
+│   ├── flights/                # CASH prices — swappable provider
+│   │   ├── index.ts            # ← the ONE place to switch provider
+│   │   ├── types.ts            # FlightPriceProvider interface
+│   │   ├── serpapi-provider.ts # ACTIVE
+│   │   ├── mock-provider.ts    # fake data, no key needed
+│   │   └── duffel-provider.ts  # stub, see "Rejected Providers"
+│   ├── miles/                  # AWARD prices — swappable provider
+│   │   ├── index.ts            # ← the ONE place to switch provider
+│   │   ├── types.ts            # MilesPriceProvider interface
+│   │   └── seats-aero-provider.ts  # ACTIVE (no-ops without a key)
+│   ├── amadeus/client.ts       # UNUSED — reference only, see "Rejected Providers"
 │   ├── alerts.ts               # evaluateAlerts(), rolling avg logic
 │   ├── email.ts                # Resend email template, sendAlertEmail()
 │   ├── supabase/
@@ -132,10 +166,17 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...   # for cron job (bypasses RLS)
 
-# Flight prices — uncomment the one matching your provider in lib/flights/index.ts
-# SERPAPI_KEY=...           # serpapi.com
-# DUFFEL_ACCESS_TOKEN=...   # duffel.com
-# (no key needed for mock provider)
+# SerpApi — from serpapi.com (free tier: 250 searches/month)
+SERPAPI_KEY=your_serpapi_key
+SERPAPI_STRICT_AS=false   # true = null instead of a non-AS fallback fare
+
+# seats.aero — OPTIONAL. Omit to disable miles tracking entirely.
+# Requires seats.aero Pro; key from Settings > API.
+SEATS_AERO_KEY=
+SEATS_AERO_SOURCES=alaska
+
+# Max days per /api/search request — each day costs one SerpApi search
+SEARCH_MAX_DAYS=5
 
 # Resend — from resend.com (need verified domain for production)
 RESEND_API_KEY=re_...
@@ -146,24 +187,32 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000   # change to Vercel URL in production
 CRON_SECRET=some_random_secret_string       # must match vercel.json cron auth header
 ```
 
-## Pending Tasks (Before App Works)
+## Status
 
-1. **Sign up for Amadeus** — https://developers.amadeus.com
-   - Create app, get Client ID + Secret
-   - Test environment gives free API access
-   - Switch to Production for real data (requires approval)
+**Live and working** at https://as-price-watcher.vercel.app as of 2026-08-21.
 
-2. **Sign up for Supabase** — https://supabase.com
-   - Create project, get URL + anon key + service role key
-   - Run `supabase/schema.sql` in Supabase SQL editor to create tables
+Done:
+- ✅ Supabase project, schema, magic-link auth (confirmed end-to-end in prod)
+- ✅ Vercel deploy
+- ✅ External cron on cron-job.org, every 4h, `Authorization: Bearer <CRON_SECRET>`
+- ✅ SerpApi wired in and verified — a real Alaska fare landed in `price_checks`
+      (AS281, $609, nonstop, 297 min, BNA→SEA)
+- ✅ All pages converted from Tailwind to inline styles
 
-3. **Sign up for Resend** — https://resend.com
-   - Free tier: 100 emails/day, 3000/month
-   - Add and verify your domain (or use their onboarding sandbox for testing)
+## Pending Tasks
 
-4. **Create `.env.local`** with all the keys above
+1. **Resend email alerts** — not set up. A price drop currently writes an
+   `alerts` row but sends no email. Needs `RESEND_API_KEY` +
+   `ALERT_FROM_EMAIL` on a verified domain. Note: Resend's onboarding sandbox
+   rate-limits to ~3 sends/hour, which made earlier testing slow.
 
-5. **Add geolocation to app/page.tsx** — detects nearest Alaska hub airport for origin default:
+2. **seats.aero for miles** — optional, ~$9.99/mo. Set `SEATS_AERO_KEY` and
+   miles start populating. No code change required.
+
+3. **UI review** — deferred. Pages work but haven't had a design pass since
+   the Tailwind → inline-styles conversion.
+
+4. **Add geolocation to app/page.tsx** — detects nearest Alaska hub airport for origin default:
 
    Add above the component function:
    ```ts
@@ -196,13 +245,12 @@ CRON_SECRET=some_random_secret_string       # must match vercel.json cron auth h
    }, [])
    ```
 
-6. **Deploy to Vercel** — connect GitHub repo, add env vars in Vercel dashboard
-
 ## Known Issues / Gotchas
 
 - **Tailwind v4 + Next.js 16**: Tailwind classes may not apply reliably. Critical layout components use inline styles instead. Don't fight this — just use inline styles for new components too.
-- **Alaska miles API**: Unofficial endpoint. If miles prices stop showing, Alaska may have changed their internal API. Check `lib/alaska/miles.ts` — the URL or payload format may need updating.
-- **Amadeus test vs production**: Test environment returns simulated/cached data. Switch `AMADEUS_ENV=production` for real live prices.
+- **Miles show as "—" forever**: expected unless `SEATS_AERO_KEY` is set. Even with a key, a dash means no saver award space on that date — not a failure.
+- **Test-environment flight APIs are a trap**: Amadeus and Duffel both serve synthetic data on their free tiers. Any provider you evaluate, confirm it returns *real* fares before wiring it in.
+- **SerpApi quota is shared** between the cron and `/api/search`. A 5-day search burns 5 of your 250. Watch it in the SerpApi dashboard.
 - **SVG icons**: Always set explicit `width` and `height` attributes on SVG elements — without them, Next.js may render them fullscreen.
 - **next/headers in Next.js 16**: `cookies()` is async — must be `await cookies()`. Already handled in `lib/supabase/server.ts`.
 - **SSL issues on Windows with Avast One**: Avast HTTPS scanning intercepts SSL certificates. If npm/git fails with SSL errors, temporarily disable "HTTPS scanning" in Avast One → Menu → Settings → Protection → Core Shields → Web Shield.
@@ -215,9 +263,9 @@ The current setup is fine as-is. Keep the GitHub repo private if you prefer not 
 ### For Public/Production Use
 If you ever want to open this app to other users:
 
-1. **Rate limiting** — Add rate limiting to `/api/search` (e.g., with Upstash Redis). Currently anyone can hammer the Amadeus API using your quota.
+1. **Rate limiting** — `/api/search` now requires a signed-in user and caps the range at `SEARCH_MAX_DAYS`, but a logged-in user can still burn quota by searching repeatedly. Add per-user rate limiting (e.g. Upstash Redis) before opening signups.
 
-2. **Amadeus production tier** — Apply for production access at Amadeus (requires describing your use case). Free production tier allows 2000 calls/month.
+2. **SerpApi paid tier** — Starter is $25/mo for 1,000 searches. Needed the moment you have more than one or two watches, or real search traffic.
 
 3. **Domain + email** — Resend requires a verified domain for production sending. Register a domain, add DNS records in Resend dashboard.
 
