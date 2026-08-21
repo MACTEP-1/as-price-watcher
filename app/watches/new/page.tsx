@@ -19,20 +19,22 @@ const POPULAR_ROUTES = [
   { o: 'PDX', d: 'LAX', label: 'PDX → LAX' },
 ]
 
-const input: React.CSSProperties = {
+const inputStyle: React.CSSProperties = {
   width: '100%', padding: '10px 14px', borderRadius: 10,
   border: '1.5px solid #e2e8f0', fontSize: 15, color: '#0f172a',
   background: '#f8fafc', boxSizing: 'border-box', outline: 'none',
 }
 
-const label: React.CSSProperties = {
+const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 13, fontWeight: 600,
   color: '#475569', marginBottom: 6,
 }
 
 export default function NewWatchPage() {
   const router = useRouter()
-  const [form, setForm] = useState({ origin: '', destination: '', departDate: '', returnDate: '', cabinClass: 'economy' })
+  const [form, setForm] = useState({
+    origin: '', destination: '', departDate: '', returnDate: '', cabinClass: 'economy',
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -71,7 +73,6 @@ export default function NewWatchPage() {
       <main style={{ maxWidth: 520, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
         <h1 style={{ margin: '0 0 24px', fontSize: 24, fontWeight: 700, color: '#0f172a' }}>Watch a route</h1>
 
-        {/* Popular routes */}
         <div style={{ marginBottom: 24 }}>
           <p style={{ margin: '0 0 8px', fontSize: 12, color: '#94a3b8' }}>Popular routes</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -92,33 +93,33 @@ export default function NewWatchPage() {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Origin / Destination */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={label}>From (IATA)</label>
-              <input required maxLength={3} value={form.origin} onChange={(e) => set('origin', e.target.value.toUpperCase())} placeholder="SEA" style={input} />
+              <label style={labelStyle}>From (IATA)</label>
+              <input required maxLength={3} value={form.origin} onChange={(e) => set('origin', e.target.value.toUpperCase())} placeholder="SEA" style={inputStyle} />
             </div>
             <div>
-              <label style={label}>To (IATA)</label>
-              <input required maxLength={3} value={form.destination} onChange={(e) => set('destination', e.target.value.toUpperCase())} placeholder="LAX" style={input} />
+              <label style={labelStyle}>To (IATA)</label>
+              <input required maxLength={3} value={form.destination} onChange={(e) => set('destination', e.target.value.toUpperCase())} placeholder="LAX" style={inputStyle} />
             </div>
           </div>
 
-          {/* Dates */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={label}>Depart date</label>
-              <input type="date" required min={minDate} value={form.departDate} onChange={(e) => set('departDate', e.target.value)} style={input} />
+              <label style={labelStyle}>Depart date</label>
+              <input type="date" required min={minDate} value={form.departDate} onChange={(e) => set('departDate', e.target.value)} style={inputStyle} />
             </div>
             <div>
-              <label style={label}>Return date <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
-              <input type="date" min={form.departDate || minDate} value={form.returnDate} onChange={(e) => set('returnDate', e.target.value)} style={input} />
+              <label style={labelStyle}>
+                Return date{' '}
+                <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input type="date" min={form.departDate || minDate} value={form.returnDate} onChange={(e) => set('returnDate', e.target.value)} style={inputStyle} />
             </div>
           </div>
 
-          {/* Cabin */}
           <div>
-            <label style={label}>Cabin class</label>
+            <label style={labelStyle}>Cabin class</label>
             <div style={{ display: 'flex', gap: 8 }}>
               {CABIN_OPTIONS.map((c) => {
                 const active = form.cabinClass === c.value
@@ -145,9 +146,16 @@ export default function NewWatchPage() {
           <button
             type="submit"
             disabled={loading}
-            style={{ width: '100%', padding: '13px', background: '#0060ac', color: '#fff', fontSize: 16, fontWeight: 700, border: 'none', borderRadius: 12, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}
+            style={{ width: '100%', padding: 13, background: '#0060ac', color: '#fff', fontSize: 16, fontWeight: 700, border: 'none', borderRadius: 12, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}
           >
             {loading ? 'Creating watch…' : 'Start watching'}
           </button>
 
-          <p style={{ margin: 0, fontSize: 12,
+          <p style={{ margin: 0, fontSize: 12, textAlign: 'center', color: '#94a3b8' }}>
+            Prices are checked every 4 hours. You&apos;ll get an email when the price drops ≥10% or hits a new low.
+          </p>
+        </form>
+      </main>
+    </>
+  )
+}
