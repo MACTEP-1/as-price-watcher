@@ -212,11 +212,7 @@ Done:
 - ✅ `CRON_SECRET` rotated 2026-08-21
 - ✅ All pages converted from Tailwind to inline styles
 
-**Rotating `CRON_SECRET` again**, if ever needed — order matters, or the cron
-401s in the gap: new value in Vercel → redeploy and wait for Ready → update
-the `Authorization: Bearer <secret>` header in cron-job.org → test run,
-expect 200. The Sensitive toggle is greyed out when editing; ignore it, only
-the value needs changing.
+See **Secrets and environment variables** below for how to rotate things.
 
 ### Live configuration — read this before debugging email
 
@@ -289,6 +285,165 @@ step 5 — synthetic rows poison the 7-day average for a week.
 
 3. **UI review** — deferred. Pages work but haven't had a design pass since
    the Tailwind → inline-styles conversion.
+
+## Secrets and environment variables
+
+### Which vars should be Sensitive
+
+Mark **Sensitive** in Vercel: `SUPABASE_SERVICE_ROLE_KEY`, `SERPAPI_KEY`,
+`RESEND_API_KEY`, `SEATS_AERO_KEY`, `CRON_SECRET`.
+
+Leave **plain**: everything `NEXT_PUBLIC_*` (it ships in the browser bundle
+regardless, so hiding it buys nothing and makes it impossible to verify),
+plus config values like `ALERT_FROM_EMAIL`, `SEARCH_MAX_DAYS`,
+`SERPAPI_STRICT_AS`.
+
+Sensitive vars are **write-only** — Vercel never decrypts them for the
+dashboard, CLI, or API. You can replace a value but never read it back. That
+is permanent for that variable; switching sensitivity requires delete and
+re-add. Sensitive vars also cannot exist in the Development environment,
+only Production and Preview.
+
+### Edit vs Rotate
+
+The three-dot menu on a variable offers both. They differ in bookkeeping,
+not in effect on the running app.
+
+**Edit** — just replaces the value.
+
+**Rotate** — replaces the value *and* captures two things Edit doesn't:
+
+- a **Note** ("where to rotate, or who to contact"), which matters precisely
+  because you can never read a sensitive value back. Without it you end up
+  holding a key you can neither inspect nor trace to its source.
+- a **confirmation checkbox**: *"I've revoked the old value at the service
+  that issued it. I understand that without revoking, the old value will
+  still work."*
+
+That checkbox states the single most important fact about rotation:
+
+> **Updating Vercel does NOT invalidate the old credential.** Only the
+> issuing service can. Rotating a leaked key without revoking it upstream
+> leaves the leaked key working indefinitely.
+
+So for `RESEND_API_KEY`, `SERPAPI_KEY`, `SEATS_AERO_KEY` and
+`SUPABASE_SERVICE_ROLE_KEY`, rotation is always two jobs: new key in the
+provider's dashboard, then **delete the old key there**. Prefer Rotate over
+Edit for these — the note and the checkbox are the point.
+
+⚠️ Rotate appears to store the new value as **Sensitive**. Don't use it on a
+plain config var like `SEARCH_MAX_DAYS` — you'd convert a readable value into
+a write-only one and only delete-and-re-add would undo it.
+
+### Rotating `CRON_SECRET`
+
+`CRON_SECRET` is different: there is no issuing service. You invented the
+string, and a copy lives in the cron-job.org `Authorization` header. Nothing
+automated can rotate a shared secret whose other half lives in a service
+Vercel has never heard of — overwriting it in both places *is* the
+revocation.
+
+Order matters, or the cron 401s in the gap:
+
+1. Generate 32 random chars (PowerShell):
+   `-join ((48..57)+(65..90)+(97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})`
+2. Vercel → Environment Variables → `CRON_SECRET` → **Rotate** (or Edit) →
+   paste → note it is also set in cron-job.org → Save
+3. **Redeploy and wait for Ready.** Env changes never reach a running
+   deployment.
+4. cron-job.org → job → **Advanced** → set header to
+   `Authorization: Bearer <new-secret>` — keep the word `Bearer` and the
+   single space
+5. **TEST RUN** → expect 200. A 401 means the two values disagree: usually a
+   stray space, a missing `Bearer `, or the redeploy hadn't finished.
+6. Optionally update `.env.local` so local testing matches production.
+
+Costs one SerpApi search for the test run.
+
+Last rotated: 2026-08-21.
+
+### Rotating Supabase keys
+
+If the Supabase vars came in through the Vercel Supabase integration, rotate
+via Integrations → the product → Settings → **Secure This Resource** →
+Rotate Secrets. That regenerates on Supabase's side and syncs to Vercel in
+one motion, rather than copying JWTs between dashboards. Redeploy after.
+
+Be careful: rotating `SUPABASE_SERVICE_ROLE_KEY` breaks anything else using
+it until updated. The cron depends on it.
+
+## Working on a second machine (Windows ↔ macOS)
+
+Development happens on a Windows 11 PC and a MacBook Air. The repo is public,
+so cloning is trivial; the only real friction is `.env.local`, which is
+gitignored by design and must be recreated by hand.
+
+### ⚠️ `.env.local` is the single point of failure
+
+Two values cannot be recovered if the machine holding them is lost:
+
+- `RESEND_API_KEY` — Resend displays a key **once**. Lost means creating a new one.
+- `CRON_SECRET` — Vercel's copy is Sensitive, therefore write-only. (Recoverable
+  in practice from the cron-job.org `Authorization` header, which displays it.)
+
+Everything else is readable from its provider's dashboard: Supabase URL / anon
+key / service-role key, and `SERPAPI_KEY`.
+
+**Keep `.env.local` in a password manager secure note.** That doubles as the
+transfer mechanism between machines and as the backup. Do not email or message
+it to yourself.
+
+`vercel env pull .env.local` looks like the right tool and isn't — it cannot
+pull Sensitive variables, so it produces a partial file and a confusing
+debugging session.
+
+### Setting up a new machine
+
+1. **Node ≥ 20.9.0** — required by Next 16. On macOS: `brew install node`, or
+   nvm if juggling versions. Check with `node -v`.
+2. `git clone` the repo, then `npm install`.
+3. Create `.env.local` from the password manager note. `.env.example` lists
+   every key with explanations if starting from scratch.
+4. Set `NEXT_PUBLIC_APP_URL=http://localhost:3000` locally — it points at the
+   Vercel URL in production.
+5. `npm run build` to verify, then `npm run dev`.
+
+Notes:
+- `npm run build` succeeds without valid credentials; it only compiles. A green
+  build does **not** prove the keys work.
+- The cron endpoint and email sending need `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`
+  and `RESEND_API_KEY` respectively. For UI and search work, omit them.
+- If you'd rather not copy `RESEND_API_KEY` around, create a second Resend key
+  named for the machine. Multiple keys are fine and revoking one doesn't affect
+  the other.
+
+### Line endings
+
+`.gitattributes` normalises everything to LF. Without it, editing a
+Windows-committed file on macOS can rewrite every line, producing diffs where
+nothing changed and destroying `git blame`.
+
+It was added after the fact, so run this **once** to normalise files already
+committed with CRLF:
+
+```bash
+git add --renormalize .
+git status          # expect a large but content-free diff
+git commit -m "Normalise line endings to LF"
+```
+
+Do it on one machine, push, and pull on the other **before** making edits
+there — otherwise both machines rewrite the same files and you get a conflict
+in every one.
+
+### Platform-specific gotchas
+
+- **Windows + Avast One**: HTTPS scanning intercepts SSL certificates. If npm
+  or git fails with SSL errors, disable Avast One → Settings → Protection →
+  Core Shields → Web Shield → HTTPS scanning.
+- **PowerShell has no `grep`.** Use `git grep` or `Select-String`. Commands in
+  this file that look like bash are macOS/Git-Bash; PowerShell equivalents are
+  noted where they differ.
 
 ## Roadmap: mobile (Expo / App Store) and multi-user
 
@@ -393,7 +548,7 @@ Store presence, background location, or native widgets.
 - **Test-environment flight APIs are a trap**: Amadeus and Duffel both serve synthetic data on their free tiers. Any provider you evaluate, confirm it returns *real* fares before wiring it in.
 - **SerpApi quota is shared** between the cron and `/api/search`. A 5-day search burns 5 of your 250. Watch it in the SerpApi dashboard.
 - **Email silently not sending**: check `ALERT_FROM_EMAIL` exists in Vercel. If it is missing, `lib/email.ts` falls back to `alerts@yourdomain.com`, Resend rejects the unverified domain, the error is caught and logged, and the alert row just gets `email_sent: false`. No crash, no email. Look for `[email] Resend error:` in Vercel → Deployments → Functions logs.
-- **Vercel "Sensitive" env vars are write-only** — never readable again, only replaceable. Don't mark `NEXT_PUBLIC_*` vars sensitive; they ship in the browser bundle anyway, so it buys nothing and makes them impossible to verify.
+- **Vercel "Sensitive" env vars are write-only** — never readable again, only replaceable. See **Secrets and environment variables** above for which vars should be sensitive, Edit vs Rotate, and rotation procedures.
 - **Cron loop is sequential**, ~5.8s per watch, and cron-job.org caps at 30s — roughly 5 watches before it needs parallelising.
 - **SVG icons**: Always set explicit `width` and `height` attributes on SVG elements — without them, Next.js may render them fullscreen.
 - **next/headers in Next.js 16**: `cookies()` is async — must be `await cookies()`. Already handled in `lib/supabase/server.ts`.

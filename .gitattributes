@@ -1,0 +1,24 @@
+# Normalise line endings across Windows and macOS.
+#
+# Without this, git stores whatever each machine commits. Editing a file on
+# the Mac that was committed from Windows (or vice versa) can rewrite every
+# line in the file, producing diffs where nothing actually changed and making
+# `git blame` useless.
+#
+# text=auto  — treat files as text and store LF in the repository
+# eol=lf     — check out LF in the working tree on every platform
+#
+# LF everywhere is standard for JS/TS projects and is what Node, Next, and
+# every modern editor expect.
+* text=auto eol=lf
+
+# Binaries must never be line-ending converted.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pdf  binary
