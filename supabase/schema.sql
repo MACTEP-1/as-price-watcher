@@ -1,5 +1,25 @@
 -- AS Price Watcher — Supabase schema
--- Run this in your Supabase SQL editor
+-- Run this in your Supabase SQL editor.
+--
+-- ─────────────────────────────────────────────────────────────────────────
+-- SECURITY MODEL — read before adding policies
+-- ─────────────────────────────────────────────────────────────────────────
+-- The anon key is PUBLIC. It ships in the browser bundle, so anyone can call
+-- Supabase's REST API directly with it. RLS policies are therefore the ONLY
+-- boundary protecting this data — not the app, not the API routes.
+--
+-- The service_role key (used by the cron) BYPASSES RLS entirely. That means
+-- writes performed by the cron need NO insert policy. If you find yourself
+-- adding a policy "so the cron can write", stop: the cron already can, and
+-- the policy you are about to add will grant that access to the public
+-- instead.
+--
+-- Naming a policy "Service role can ..." does NOT restrict it to the service
+-- role. Restriction requires an explicit `to service_role` clause. An earlier
+-- version of this schema had `for insert with check (true)` on both
+-- price_checks and alerts, which allowed ANY anonymous caller to write rows.
+-- Fixed 2026-08-21. Do not reintroduce.
+-- ─────────────────────────────────────────────────────────────────────────
 
 -- ─────────────────────────────────────────────
 -- Extensions
@@ -24,6 +44,9 @@ create table if not exists watches (
 
 alter table watches enable row level security;
 
+-- Owners get full CRUD on their own rows. `with check` is what stops a user
+-- inserting or updating a row so that it belongs to someone else.
+drop policy if exists "Users can manage their own watches" on watches;
 create policy "Users can manage their own watches"
   on watches for all
   using (auth.uid() = user_id)
@@ -47,7 +70,8 @@ create table if not exists price_checks (
 
 alter table price_checks enable row level security;
 
--- Users can read price_checks for their own watches
+-- Read-only, scoped through the parent watch.
+drop policy if exists "Users can read price_checks for their watches" on price_checks;
 create policy "Users can read price_checks for their watches"
   on price_checks for select
   using (
@@ -58,10 +82,10 @@ create policy "Users can read price_checks for their watches"
     )
   );
 
--- Service role (cron) can insert
-create policy "Service role can insert price_checks"
-  on price_checks for insert
-  with check (true);
+-- Deliberately NO insert/update/delete policy. Only the cron writes here, and
+-- it uses the service_role key, which bypasses RLS. Adding an insert policy
+-- would open writes to the public. See SECURITY MODEL at the top.
+drop policy if exists "Service role can insert price_checks" on price_checks;
 
 -- ─────────────────────────────────────────────
 -- Alerts
@@ -82,13 +106,13 @@ create table if not exists alerts (
 
 alter table alerts enable row level security;
 
+drop policy if exists "Users can read their own alerts" on alerts;
 create policy "Users can read their own alerts"
   on alerts for select
   using (auth.uid() = user_id);
 
-create policy "Service role can insert alerts"
-  on alerts for insert
-  with check (true);
+-- Deliberately NO insert policy — same reasoning as price_checks above.
+drop policy if exists "Service role can insert alerts" on alerts;
 
 -- ─────────────────────────────────────────────
 -- Indexes
@@ -102,7 +126,13 @@ create index if not exists idx_alerts_watch_id on alerts(watch_id);
 -- ─────────────────────────────────────────────
 -- Convenience view: latest price per watch
 -- ─────────────────────────────────────────────
-create or replace view latest_prices as
+-- security_invoker = on makes the view evaluate RLS as the CALLER rather than
+-- as the view owner. Without it (the Postgres default) the view reads
+-- price_checks with owner privileges and returns every user's rows,
+-- regardless of the select policy above.
+create or replace view latest_prices
+  with (security_invoker = on)
+  as
   select distinct on (watch_id)
     watch_id,
     cash_price,

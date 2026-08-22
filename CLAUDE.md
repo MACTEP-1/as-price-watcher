@@ -189,22 +189,73 @@ CRON_SECRET=some_random_secret_string       # must match vercel.json cron auth h
 
 ## Status
 
-**Live and working** at https://as-price-watcher.vercel.app as of 2026-08-21.
+**Live, and the full loop works.** https://as-price-watcher.vercel.app,
+as of 2026-08-21.
+
+```
+cron-job.org → /api/cron/check-prices → SerpApi → Google Flights
+            → Supabase → evaluateAlerts → Resend → inbox
+```
 
 Done:
 - ✅ Supabase project, schema, magic-link auth (confirmed end-to-end in prod)
 - ✅ Vercel deploy
-- ✅ External cron on cron-job.org, every 4h, `Authorization: Bearer <CRON_SECRET>`
-- ✅ SerpApi wired in and verified — a real Alaska fare landed in `price_checks`
+- ✅ External cron on cron-job.org, `Authorization: Bearer <CRON_SECRET>`
+- ✅ SerpApi wired in and verified — real Alaska fare in `price_checks`
       (AS281, $609, nonstop, 297 min, BNA→SEA)
+- ✅ Deterministic tie-breaking in the SerpApi provider (see
+      docs/price-provider-decisions.md)
+- ✅ Alert noise guards in `lib/alerts.ts`
+- ✅ Resend email alerts — **verified end-to-end**
 - ✅ All pages converted from Tailwind to inline styles
+
+### Live configuration — read this before debugging email
+
+| Thing | Value |
+|---|---|
+| Cron schedule | **Daily, 6:00 AM local = 13:00 UTC** (not every 4h) |
+| SerpApi usage | ~30 searches/month against a 250 free-tier limit |
+| App login / alert recipient | **`oracle_11@hotmail.com`** |
+| Resend sender | `onboarding@resend.dev` (no domain verified) |
+| Earliest genuine alert | **Tue 2026-08-26** — see below |
+
+**The recipient address is load-bearing.** Alerts go to the Supabase user's
+email, looked up by the cron via `supabase.auth.admin.getUserById()`. Because
+the sender is `onboarding@resend.dev` — Resend's shared testing domain — it
+**only delivers to the email that owns the Resend account**. So the Resend
+account must be registered to `oracle_11@hotmail.com`. A valid API key from a
+Resend account under any *other* address will 403 on every send while looking
+perfectly configured. This is the single most likely cause of "alerts stopped
+working".
+
+To send to anyone else, verify a domain in Resend and change
+`ALERT_FROM_EMAIL`. `lib/email.ts` already reads it from env — no code change.
+
+**Why no alerts until Aug 26:** `ALERT_MIN_CHECKS` defaults to 5 and the cron
+runs once a day, so five days of history must accumulate first. Silence before
+then is expected behaviour, not a fault.
+
+### How email was verified (2026-08-21)
+
+Real conditions couldn't produce an alert (2 checks, flat price), so it was
+forced:
+
+1. `delete from alerts; delete from price_checks;`
+2. Inserted four synthetic checks at $890–910, dated 1–4 days back
+3. Ran a cron test run → `{"status":"alert fired","type":"new_low"}`
+4. "🔔 New price low: BNA → SEA" arrived in Hotmail showing $609
+5. Deleted the seed data so it wouldn't skew the chart or rolling average
+
+Repeat that recipe to re-test after changing alert logic. Always clean up
+step 5 — synthetic rows poison the 7-day average for a week.
 
 ## Pending Tasks
 
-1. **Resend email alerts** — not set up. A price drop currently writes an
-   `alerts` row but sends no email. Needs `RESEND_API_KEY` +
-   `ALERT_FROM_EMAIL` on a verified domain. Note: Resend's onboarding sandbox
-   rate-limits to ~3 sends/hour, which made earlier testing slow.
+1. **Bearer-token auth helper** — NEXT. Every API route authenticates via
+   cookies (`createSupabaseServerClient` → `next/headers`). A React Native
+   client sends `Authorization: Bearer <token>` and would get 401. ~15-line
+   helper: check the header first, fall back to the cookie client. Web
+   unchanged. This is the first real step toward the Expo app.
 
 2. **seats.aero for miles** — optional, ~$9.99/mo. Set `SEATS_AERO_KEY` and
    miles start populating. No code change required.
@@ -251,6 +302,9 @@ Done:
 - **Miles show as "—" forever**: expected unless `SEATS_AERO_KEY` is set. Even with a key, a dash means no saver award space on that date — not a failure.
 - **Test-environment flight APIs are a trap**: Amadeus and Duffel both serve synthetic data on their free tiers. Any provider you evaluate, confirm it returns *real* fares before wiring it in.
 - **SerpApi quota is shared** between the cron and `/api/search`. A 5-day search burns 5 of your 250. Watch it in the SerpApi dashboard.
+- **Email silently not sending**: check `ALERT_FROM_EMAIL` exists in Vercel. If it is missing, `lib/email.ts` falls back to `alerts@yourdomain.com`, Resend rejects the unverified domain, the error is caught and logged, and the alert row just gets `email_sent: false`. No crash, no email. Look for `[email] Resend error:` in Vercel → Deployments → Functions logs.
+- **Vercel "Sensitive" env vars are write-only** — never readable again, only replaceable. Don't mark `NEXT_PUBLIC_*` vars sensitive; they ship in the browser bundle anyway, so it buys nothing and makes them impossible to verify.
+- **Cron loop is sequential**, ~5.8s per watch, and cron-job.org caps at 30s — roughly 5 watches before it needs parallelising.
 - **SVG icons**: Always set explicit `width` and `height` attributes on SVG elements — without them, Next.js may render them fullscreen.
 - **next/headers in Next.js 16**: `cookies()` is async — must be `await cookies()`. Already handled in `lib/supabase/server.ts`.
 - **SSL issues on Windows with Avast One**: Avast HTTPS scanning intercepts SSL certificates. If npm/git fails with SSL errors, temporarily disable "HTTPS scanning" in Avast One → Menu → Settings → Protection → Core Shields → Web Shield.
