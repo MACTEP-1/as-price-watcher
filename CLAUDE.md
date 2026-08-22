@@ -207,7 +207,16 @@ Done:
       docs/price-provider-decisions.md)
 - ✅ Alert noise guards in `lib/alerts.ts`
 - ✅ Resend email alerts — **verified end-to-end**
+- ✅ RLS audit + fix — removed two policies that allowed public writes to
+      `price_checks` and `alerts`; made `latest_prices` `security_invoker`
+- ✅ `CRON_SECRET` rotated 2026-08-21
 - ✅ All pages converted from Tailwind to inline styles
+
+**Rotating `CRON_SECRET` again**, if ever needed — order matters, or the cron
+401s in the gap: new value in Vercel → redeploy and wait for Ready → update
+the `Authorization: Bearer <secret>` header in cron-job.org → test run,
+expect 200. The Sensitive toggle is greyed out when editing; ignore it, only
+the value needs changing.
 
 ### Live configuration — read this before debugging email
 
@@ -215,18 +224,36 @@ Done:
 |---|---|
 | Cron schedule | **Daily, 6:00 AM local = 13:00 UTC** (not every 4h) |
 | SerpApi usage | ~30 searches/month against a 250 free-tier limit |
-| App login / alert recipient | **`oracle_11@hotmail.com`** |
+| App login / alert recipient | a Hotmail address — look it up, see below |
 | Resend sender | `onboarding@resend.dev` (no domain verified) |
 | Earliest genuine alert | **Tue 2026-08-26** — see below |
 
 **The recipient address is load-bearing.** Alerts go to the Supabase user's
 email, looked up by the cron via `supabase.auth.admin.getUserById()`. Because
 the sender is `onboarding@resend.dev` — Resend's shared testing domain — it
-**only delivers to the email that owns the Resend account**. So the Resend
-account must be registered to `oracle_11@hotmail.com`. A valid API key from a
-Resend account under any *other* address will 403 on every send while looking
-perfectly configured. This is the single most likely cause of "alerts stopped
-working".
+**only delivers to the email that owns the Resend account**.
+
+So there is one invariant to preserve:
+
+> The Resend account owner's email MUST equal the app user's email.
+
+A valid API key from a Resend account under any *other* address will 403 on
+every send while looking perfectly configured. This is the single most likely
+cause of "alerts stopped working".
+
+To see the current value, query it rather than trusting a note — Supabase →
+SQL Editor:
+
+```sql
+select w.origin || ' → ' || w.destination as route, u.email
+from watches w
+join auth.users u on u.id = w.user_id
+where w.active = true;
+```
+
+Whatever that returns is the address that must own the Resend account. Check
+it against Resend → Settings → the account email. (The address is deliberately
+not written down here — it is PII, and this file is in git.)
 
 To send to anyone else, verify a domain in Resend and change
 `ALERT_FROM_EMAIL`. `lib/email.ts` already reads it from env — no code change.
@@ -262,6 +289,69 @@ step 5 — synthetic rows poison the 7-day average for a week.
 
 3. **UI review** — deferred. Pages work but haven't had a design pass since
    the Tailwind → inline-styles conversion.
+
+## Roadmap: mobile (Expo / App Store) and multi-user
+
+An iOS app is a stated goal. Nothing below needs doing yet — it is here so
+that day-to-day changes don't quietly make it harder.
+
+### What already helps
+
+`supabase-js` runs natively in React Native, so an Expo app can query Postgres
+directly under RLS — auth, watches, price history, all of it. Only two things
+genuinely need a server: SerpApi search (holds the key) and the cron.
+
+### Architecture habits to preserve
+
+- **Keep `lib/` free of `next/*` imports.** `lib/alerts.ts` is already pure
+  and portable to React Native as-is. `lib/utils.ts` is portable except
+  `cn()` (clsx + tailwind-merge), which is web-only — worth splitting the
+  formatters out from it eventually.
+- **Don't put business logic in server components.** `app/dashboard/page.tsx`
+  currently does query-and-enrich inline (fetch watches → fetch history →
+  merge into `WatchWithLatestPrice`). Mobile cannot reuse a server component,
+  so that logic would get duplicated and drift. Extract to `lib/watches.ts`.
+- **Keep `types/` framework-agnostic.** It already is.
+
+### The one blocking change
+
+Every API route authenticates via cookies — `createSupabaseServerClient()`
+reads `next/headers`. A React Native client keeps its JWT in SecureStore and
+sends `Authorization: Bearer <token>`, so every route would 401.
+
+Fix is a ~15-line helper: check the Authorization header first, fall back to
+the cookie client. Web behaviour unchanged. **This is the next task.**
+
+### Also needed before an app ships
+
+- **Magic-link deep linking** — needs a custom scheme
+  (`as-price://auth/callback`) rather than the current redirect to `/dashboard`.
+- **RLS audit** — if mobile queries Supabase directly, policies are the only
+  boundary. See the SECURITY MODEL header in `supabase/schema.sql`.
+
+### Real multi-user blockers, in the order they bite
+
+1. **SerpApi quota is the binding constraint** — not email, not hosting.
+   250 searches/month free. Ten users × three watches × daily = ~900/month.
+   Starter is $25/mo for 1,000. This is what caps user count.
+2. **Supabase magic-link rate limit** — the built-in SMTP allows only a few
+   sends per hour on the free tier. Multi-user signup needs custom SMTP.
+   Convenient: point it at Resend, so one verified domain serves both login
+   emails and alerts.
+3. **Per-user rate limiting on `/api/search`** — it requires a signed-in user
+   and caps the range at `SEARCH_MAX_DAYS`, but a logged-in user can still
+   burn quota by searching repeatedly.
+4. **RLS re-audit** before anyone else's data is in the database.
+
+Swapping Resend off `resend.dev` is genuinely one env var (`ALERT_FROM_EMAIL`)
+— `lib/email.ts` already reads it from env.
+
+### The cheaper alternative, honestly
+
+The app already ships a `manifest.json`, and since iOS 16.4 home-screen PWAs
+support web push. If notifications are the main reason for wanting an app,
+that path may get there for near-zero effort. Expo earns its keep for App
+Store presence, background location, or native widgets.
 
 4. **Add geolocation to app/page.tsx** — detects nearest Alaska hub airport for origin default:
 
