@@ -338,7 +338,7 @@ export default function Home() {
       {/* Hero */}
       <div style={s.hero}>
         <h1 style={s.heroTitle}>Find the best Alaska fare</h1>
-        <p style={s.heroSub}>Search cash & miles prices across a date range — no account needed</p>
+        <p style={s.heroSub}>Search cash prices across a date range — sign in to search and save watches</p>
       </div>
 
       {/* Search card */}

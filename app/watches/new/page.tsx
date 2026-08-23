@@ -10,6 +10,13 @@ const CABIN_OPTIONS = [
   { value: 'business', label: 'Business / First' },
 ] as const
 
+const TRIP_OPTIONS = [
+  { value: 'one_way', label: 'One-way' },
+  { value: 'round_trip', label: 'Round trip' },
+] as const
+
+type TripType = (typeof TRIP_OPTIONS)[number]['value']
+
 const POPULAR_ROUTES = [
   { o: 'SEA', d: 'LAX', label: 'SEA → LAX' },
   { o: 'SEA', d: 'SFO', label: 'SEA → SFO' },
@@ -30,8 +37,22 @@ const labelStyle: React.CSSProperties = {
   color: '#475569', marginBottom: 6,
 }
 
+/**
+ * Shared pill style for the route / trip-type / cabin selectors.
+ * Standalone function rather than a key on a styles object — a
+ * Record<string, React.CSSProperties> cannot hold function values.
+ */
+const pill = (active: boolean): React.CSSProperties => ({
+  padding: '8px 14px', fontSize: 13, fontWeight: 500, borderRadius: 8,
+  border: `1.5px solid ${active ? '#0060ac' : '#e2e8f0'}`,
+  background: active ? '#0060ac' : '#fff',
+  color: active ? '#fff' : '#475569',
+  cursor: 'pointer', textAlign: 'center',
+})
+
 export default function NewWatchPage() {
   const router = useRouter()
+  const [tripType, setTripType] = useState<TripType>('one_way')
   const [form, setForm] = useState({
     origin: '', destination: '', departDate: '', returnDate: '', cabinClass: 'economy',
   })
@@ -42,8 +63,30 @@ export default function NewWatchPage() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  /**
+   * Switching to one-way clears any return date, so a stale value can never
+   * be submitted. This is the bug that produced a same-day round trip that
+   * nobody chose: the return field defaulted to allowing the departure date
+   * and there was no explicit trip-type decision anywhere.
+   */
+  function chooseTripType(next: TripType) {
+    setTripType(next)
+    if (next === 'one_way') set('returnDate', '')
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    // Client-side guard; the API enforces the same rules independently.
+    if (tripType === 'round_trip' && !form.returnDate) {
+      setError('Pick a return date, or switch to one-way.')
+      return
+    }
+    if (tripType === 'round_trip' && form.returnDate < form.departDate) {
+      setError('Return date cannot be before the departure date.')
+      return
+    }
+
     setLoading(true)
     setError('')
     const res = await fetch('/api/watches', {
@@ -53,7 +96,7 @@ export default function NewWatchPage() {
         origin: form.origin.toUpperCase().trim(),
         destination: form.destination.toUpperCase().trim(),
         departDate: form.departDate,
-        returnDate: form.returnDate || null,
+        returnDate: tripType === 'round_trip' ? form.returnDate : null,
         cabinClass: form.cabinClass,
       }),
     })
@@ -66,6 +109,8 @@ export default function NewWatchPage() {
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   const minDate = tomorrow.toISOString().split('T')[0]
+
+  const isRoundTrip = tripType === 'round_trip'
 
   return (
     <>
@@ -83,7 +128,7 @@ export default function NewWatchPage() {
                   key={r.label}
                   type="button"
                   onClick={() => { set('origin', r.o); set('destination', r.d) }}
-                  style={{ padding: '5px 12px', fontSize: 12, fontWeight: 500, borderRadius: 8, border: `1.5px solid ${active ? '#0060ac' : '#e2e8f0'}`, background: active ? '#0060ac' : '#fff', color: active ? '#fff' : '#475569', cursor: 'pointer' }}
+                  style={{ ...pill(active), padding: '5px 12px', fontSize: 12 }}
                 >
                   {r.label}
                 </button>
@@ -93,6 +138,23 @@ export default function NewWatchPage() {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Trip type — must be chosen explicitly, never inferred */}
+          <div>
+            <label style={labelStyle}>Trip type</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {TRIP_OPTIONS.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => chooseTripType(t.value)}
+                  style={{ ...pill(tripType === t.value), flex: 1 }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
               <label style={labelStyle}>From (IATA)</label>
@@ -104,36 +166,47 @@ export default function NewWatchPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isRoundTrip ? '1fr 1fr' : '1fr', gap: 16 }}>
             <div>
               <label style={labelStyle}>Depart date</label>
               <input type="date" required min={minDate} value={form.departDate} onChange={(e) => set('departDate', e.target.value)} style={inputStyle} />
             </div>
-            <div>
-              <label style={labelStyle}>
-                Return date{' '}
-                <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span>
-              </label>
-              <input type="date" min={form.departDate || minDate} value={form.returnDate} onChange={(e) => set('returnDate', e.target.value)} style={inputStyle} />
-            </div>
+
+            {/* Only rendered for a round trip, so a one-way can never carry one */}
+            {isRoundTrip && (
+              <div>
+                <label style={labelStyle}>Return date</label>
+                <input
+                  type="date"
+                  required
+                  min={form.departDate || minDate}
+                  value={form.returnDate}
+                  onChange={(e) => set('returnDate', e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+            )}
           </div>
+
+          {isRoundTrip && form.returnDate && form.returnDate === form.departDate && (
+            <div style={{ padding: '10px 14px', background: '#fffbeb', color: '#b45309', fontSize: 13, borderRadius: 8 }}>
+              Same-day return — this prices a there-and-back on {form.departDate}. Intended?
+            </div>
+          )}
 
           <div>
             <label style={labelStyle}>Cabin class</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              {CABIN_OPTIONS.map((c) => {
-                const active = form.cabinClass === c.value
-                return (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => set('cabinClass', c.value)}
-                    style={{ flex: 1, padding: '8px 4px', fontSize: 12, fontWeight: 500, borderRadius: 8, border: `1.5px solid ${active ? '#0060ac' : '#e2e8f0'}`, background: active ? '#0060ac' : '#fff', color: active ? '#fff' : '#475569', cursor: 'pointer', textAlign: 'center' }}
-                  >
-                    {c.label}
-                  </button>
-                )
-              })}
+              {CABIN_OPTIONS.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => set('cabinClass', c.value)}
+                  style={{ ...pill(form.cabinClass === c.value), flex: 1, padding: '8px 4px', fontSize: 12 }}
+                >
+                  {c.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -152,7 +225,7 @@ export default function NewWatchPage() {
           </button>
 
           <p style={{ margin: 0, fontSize: 12, textAlign: 'center', color: '#94a3b8' }}>
-            Prices are checked every 4 hours. You&apos;ll get an email when the price drops ≥10% or hits a new low.
+            Prices are checked daily. You&apos;ll get an email when the price drops ≥10% or hits a new low.
           </p>
         </form>
       </main>

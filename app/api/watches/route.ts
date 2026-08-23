@@ -36,6 +36,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'departDate must be in the future' }, { status: 400 })
   }
 
+  /**
+   * Trip type is encoded by return_date: null = one-way, set = round trip.
+   * There is deliberately no separate trip_type column — two sources of
+   * truth for one fact drift apart.
+   *
+   * A returnDate BEFORE departDate is nonsense and was previously accepted,
+   * as was an accidental same-day return (the form's date picker allowed
+   * the departure date itself). Same-day is legitimate — a business
+   * day-trip — so it is allowed, but only when explicitly chosen; the UI
+   * now makes that choice deliberate and warns about it.
+   */
+  if (returnDate != null && returnDate !== '') {
+    if (returnDate < departDate) {
+      return NextResponse.json(
+        { error: 'returnDate cannot be before departDate' },
+        { status: 400 }
+      )
+    }
+  }
+
   // Prevent duplicates
   const { data: existing } = await supabase
     .from('watches')
@@ -58,7 +78,8 @@ export async function POST(req: NextRequest) {
       origin,
       destination,
       depart_date: departDate,
-      return_date: returnDate ?? null,
+      // Empty string must normalise to null, or it would read as a round trip
+      return_date: returnDate ? returnDate : null,
       cabin_class: cabinClass ?? 'economy',
     })
     .select()

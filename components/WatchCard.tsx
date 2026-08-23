@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor } from '@/lib/utils'
 import PriceSparkline from './PriceSparkline'
 
 interface Props {
@@ -36,7 +36,9 @@ export default function WatchCard({ watch, onDelete }: Props) {
             </div>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
               {formatDate(watch.depart_date)}
-              {watch.return_date && ` · return ${formatDate(watch.return_date)}`}
+              {watch.return_date
+                ? ` · return ${formatDate(watch.return_date)}`
+                : ' · one-way'}
               {' · '}
               <span style={{ textTransform: 'capitalize' }}>{watch.cabin_class.replace('_', ' ')}</span>
             </p>
@@ -49,7 +51,7 @@ export default function WatchCard({ watch, onDelete }: Props) {
             <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cash</p>
             <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0060ac' }}>{formatCash(watch.latest_cash)}</p>
             {cashChange !== null && (
-              <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: cashChange < 0 ? '#16a34a' : '#ef4444' }}>
+              <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: changeColor(cashChange) }}>
                 {formatPctChange(cashChange)} vs prev
               </p>
             )}
@@ -64,7 +66,7 @@ export default function WatchCard({ watch, onDelete }: Props) {
             <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Miles</p>
             <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#00a551' }}>{formatMiles(watch.latest_miles)}</p>
             {milesChange !== null && (
-              <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: milesChange < 0 ? '#16a34a' : '#ef4444' }}>
+              <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: changeColor(milesChange) }}>
                 {formatPctChange(milesChange)} vs prev
               </p>
             )}

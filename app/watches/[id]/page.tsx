@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor } from '@/lib/utils'
 
 export const revalidate = 0
 
@@ -56,7 +56,9 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
           </h1>
           <p style={{ margin: 0, fontSize: 15, color: '#64748b' }}>
             {formatDate(watch.depart_date)}
-            {watch.return_date && ` · return ${formatDate(watch.return_date)}`}
+            {watch.return_date
+              ? ` · return ${formatDate(watch.return_date)}`
+              : ' · one-way'}
             {' · '}
             <span style={{ textTransform: 'capitalize' }}>{watch.cabin_class.replace('_', ' ')}</span>
           </p>
@@ -65,10 +67,12 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
         {/* Current price cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div style={card}>
-            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cash price</p>
+            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {watch.return_date ? 'Cash price · round trip' : 'Cash price · one-way'}
+            </p>
             <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: '#0060ac' }}>{formatCash(latest?.cash_price ?? null)}</p>
             {cashChange !== null && (
-              <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: cashChange < 0 ? '#16a34a' : '#ef4444' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: changeColor(cashChange) }}>
                 {formatPctChange(cashChange)} since last check
               </p>
             )}
@@ -81,7 +85,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
             <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Miles price</p>
             <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: '#00a551' }}>{formatMiles(latest?.miles_price ?? null)}</p>
             {milesChange !== null && (
-              <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: milesChange < 0 ? '#16a34a' : '#ef4444' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: changeColor(milesChange) }}>
                 {formatPctChange(milesChange)} since last check
               </p>
             )}

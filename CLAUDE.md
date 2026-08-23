@@ -210,6 +210,7 @@ Done:
 - ✅ RLS audit + fix — removed two policies that allowed public writes to
       `price_checks` and `alerts`; made `latest_prices` `security_invoker`
 - ✅ `CRON_SECRET` rotated 2026-08-21
+- ✅ Explicit one-way / round-trip choice (2026-08-23) — see below
 - ✅ All pages converted from Tailwind to inline styles
 
 See **Secrets and environment variables** below for how to rotate things.
@@ -444,6 +445,132 @@ in every one.
 - **PowerShell has no `grep`.** Use `git grep` or `Select-String`. Commands in
   this file that look like bash are macOS/Git-Bash; PowerShell equivalents are
   noted where they differ.
+
+## Trip type — one-way vs round trip
+
+**There is no `trip_type` column, deliberately.** `return_date IS NULL` means
+one-way; a value means round trip. Two sources of truth for one fact drift
+apart.
+
+### The bug this fixed (2026-08-23)
+
+The BNA→SEA watch was silently created with `return_date = depart_date` — a
+same-day there-and-back. Nobody chose that. The `/watches/new` form had a
+return-date input with `min={form.departDate}`, so the departure date itself
+was selectable, and nothing anywhere validated the result or asked for an
+explicit choice.
+
+Consequence: the cron passed `return_date` to SerpApi, making it a round-trip
+query (`type=1`). SerpApi's `price` for a round trip is the **total for both
+directions**, while `flights[]` carries only the outbound legs. So the UI
+showed a round-trip fare beside a 0-stop, 297-minute outbound flight and read
+as though it were a one-way price.
+
+### What is enforced now
+
+- `/watches/new` has an explicit **One-way / Round trip** toggle. The
+  return-date field only renders for round trip, so a one-way cannot carry
+  one, and switching back to one-way clears any date already picked.
+- A same-day return is **allowed** — a business day-trip is a real
+  itinerary — but shows an amber "Intended?" warning. The problem was never
+  same-day trips; it was getting one without choosing.
+- `POST /api/watches` independently rejects `returnDate < departDate` and
+  normalises `''` to `null`. Validation that lives only in the UI is not
+  validation.
+- `WatchCard` and the detail page state "one-way" explicitly rather than
+  trailing off after the date. The detail price card reads **"Cash price ·
+  round trip"** or **"· one-way"**, so a both-directions total is never
+  mistaken for a one-way fare.
+
+### Note on the homepage search
+
+`app/page.tsx` sweeps a *range of departure dates* looking for the cheapest
+day and never sends a return, so its results are always one-way. That is a
+reasonable design, but the results are not currently labelled as such.
+
+### Homepage copy — corrected 2026-08-23
+
+The subtitle used to read *"Search cash & miles prices across a date range —
+no account needed"*. Two of those claims stopped being true when
+`/api/search` was locked down: it requires a signed-in user, and miles are
+always blank without `SEATS_AERO_KEY`. Now reads:
+
+> Search cash prices across a date range — sign in to search and save watches
+
+Still unstated, and worth adding if the page is touched again: a range costs
+**one SerpApi search per day in it**, capped at `SEARCH_MAX_DAYS` (5), out of
+250/month.
+
+### Flat prices are not increases
+
+`formatPctChange` used to render a 0% change as `▲ 0%` in red, because the
+sign was chosen with `pct < 0 ? '▼' : '▲'` and the colour with the same
+comparison — so "no change" fell through to the increase branch and read as
+bad news. On a fare that sits still for days, that is most of what the UI
+shows.
+
+Now `formatPctChange(0)` returns `"no change"` with no arrow, and a
+`changeColor()` helper lives beside it in `lib/utils.ts` returning grey for
+flat, green for a drop, red for a rise. Both round first, so a 0.4% wobble
+counts as flat. `WatchCard` and the detail page both use the helper rather
+than inlining the ternary — that duplication is what let the two disagree.
+
+## Backlog: watch lifecycle and archiving
+
+Not broken — a design gap. Noted 2026-08-21, deliberately deferred.
+
+### How it works today
+
+The cron deactivates a watch whose departure date has passed, *before*
+fetching, so an expired watch never costs a SerpApi search:
+
+```ts
+if (new Date(watch.depart_date) < new Date()) {
+  await supabase.from('watches').update({ active: false }).eq('id', watch.id)
+  continue
+}
+```
+
+`active = true` is then filtered in the cron, `/api/watches`, and the
+dashboard, so it stays excluded. Quota behaviour is correct.
+
+### The gaps
+
+**1. `active` is overloaded.** Three unrelated events set `active = false` and
+afterwards are indistinguishable:
+
+- departure date passed (auto-expiry)
+- user clicked "Remove watch" (soft delete)
+- user clicked unsubscribe in an alert email
+
+**2. No archive view.** The dashboard filters `active = true`, so an expired
+watch vanishes along with all its collected price history. The data survives —
+`price_checks` rows remain, and `/watches/[id]` does *not* filter on `active`,
+so a bookmarked URL still renders the full chart — but nothing in the UI links
+there. For a price tracker this is the real loss: "what did this route do in
+the month before I flew" is the interesting question and it is currently only
+answerable if you saved the link.
+
+**3. No reactivation.** An accidental removal is permanent from the UI, though
+the row still exists.
+
+### If/when this is picked up, in value order
+
+- **Distinguish the three cases** — a `status` column
+  (`active` / `expired` / `removed` / `unsubscribed`) or a nullable
+  `deactivated_reason`. Cheap now; a migration once there is history worth
+  preserving.
+- **An archive view** — a dashboard section or `/watches/archive` listing
+  expired watches with their final price history. This is what converts a
+  hidden row into actual product value.
+- **Reactivate** — low value while single-user.
+
+### Minor timing note
+
+`new Date('2026-09-02')` parses as UTC midnight, so the 13:00 UTC cron
+deactivates on the *morning of* departure. An evening flight stops being
+tracked a few hours early. Probably desirable; documented so it isn't
+mistaken for a bug.
 
 ## Roadmap: mobile (Expo / App Store) and multi-user
 
