@@ -632,14 +632,42 @@ genuinely need a server: SerpApi search (holds the key) and the cron.
   so that logic would get duplicated and drift. Extract to `lib/watches.ts`.
 - **Keep `types/` framework-agnostic.** It already is.
 
-### The one blocking change
+### Dual-scheme auth — DONE 2026-08-24
 
-Every API route authenticates via cookies — `createSupabaseServerClient()`
-reads `next/headers`. A React Native client keeps its JWT in SecureStore and
-sends `Authorization: Bearer <token>`, so every route would 401.
+API routes accept **either** a session cookie or `Authorization: Bearer <jwt>`,
+so the same endpoints serve the web app and a future native client.
 
-Fix is a ~15-line helper: check the Authorization header first, fall back to
-the cookie client. Web behaviour unchanged. **This is the next task.**
+`lib/supabase/server.ts` now exports three clients. Picking the wrong one is
+the main hazard:
+
+| Function | Auth | Use in |
+|---|---|---|
+| `createSupabaseServerClient()` | cookies only | **Server components** |
+| `createSupabaseRouteClient()` | Bearer, else cookies | **API routes** |
+| `createSupabaseServiceClient()` | service role, **bypasses RLS** | cron only |
+
+The Bearer path uses the **anon key with the caller's JWT attached**, so RLS
+still applies as that user. It must never use the service-role key — that
+would let any caller bypass RLS entirely.
+
+Browsers never send an `Authorization` header, so web behaviour is unchanged;
+the header branch is simply never taken.
+
+Current assignment (verify with a grep if routes are added):
+
+```
+createSupabaseRouteClient    /api/watches, /api/watches/[id],
+                             /api/search, /api/auth/me
+createSupabaseServerClient   /dashboard, /watches/[id]   (server components)
+createSupabaseServiceClient  /api/cron/check-prices, /api/alerts/unsubscribe
+```
+
+`/api/auth/callback` uses `createServerClient` directly — it is performing the
+cookie exchange itself, so it cannot use a helper that reads cookies.
+
+Header parsing accepts a lowercase scheme and extra whitespace, and falls back
+to cookies for anything malformed (`Basic …`, `Bearer` with no token). It never
+throws — a bad header just yields an anonymous request and the route's own 401.
 
 ### Also needed before an app ships
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice } from '@/lib/miles'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSupabaseRouteClient } from '@/lib/supabase/server'
 import type { CabinClass } from '@/types'
 
 /**
@@ -26,7 +26,7 @@ export interface SearchResult {
 
 export async function POST(req: NextRequest) {
   // Searches cost real API quota — require a signed-in user.
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseRouteClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json(
