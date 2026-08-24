@@ -13,7 +13,7 @@ Tracks Alaska Airlines flight prices (both **cash fares** and **miles/award pric
 | Cash prices | SerpApi (Google Flights engine) | Free tier: 250 searches/month |
 | Miles prices | seats.aero Partner API | Needs seats.aero Pro (~$9.99/mo); optional |
 | Email | Resend | Free tier: 100 emails/day |
-| Hosting | Vercel (free tier) | Cron jobs every 4 hours |
+| Hosting | Vercel (free tier) | No vercel.json — cron runs from cron-job.org, daily |
 | Styling | Tailwind CSS v4 + inline styles | Tailwind v4 was unreliable with Next 16, so critical layout uses inline styles |
 | Charts | Recharts | Sparklines + dual-axis price history |
 | Language | TypeScript |  |
@@ -34,13 +34,14 @@ Tracks Alaska Airlines flight prices (both **cash fares** and **miles/award pric
   outbound journey. Fetching return legs needs a second call
   (`departure_token`) and would double quota use — deliberately skipped.
 
-Quota math — 1 search per active watch per cron tick:
+Quota math — **1 search per distinct ITINERARY per cron tick**, not per
+watch. Since migration 001, N users watching the same trip cost one search:
 
-| Cron interval | per day | per month | watches on free tier |
+| Cron interval | per day | per month | itineraries on free tier |
 |---|---|---|---|
-| every 4h | 6 | ~180 | 1 |
-| every 6h | 4 | ~120 | 2 |
+| daily (current) | 1 | ~30 | 8 |
 | every 12h | 2 | ~60 | 4 |
+| every 6h | 4 | ~120 | 2 |
 
 ### Miles/Award Prices (seats.aero)
 - `lib/miles/seats-aero-provider.ts`, selected in `lib/miles/index.ts`
@@ -97,7 +98,7 @@ as-price-watcher/
 │       ├── alerts/
 │       │   └── unsubscribe/route.ts # One-click unsubscribe from email
 │       └── cron/
-│           └── check-prices/route.ts # Vercel cron, runs every 4h
+│           └── check-prices/route.ts # Cron (cron-job.org), per itinerary
 ├── components/
 │   ├── WatchCard.tsx           # Dashboard card with sparklines
 │   ├── PriceSparkline.tsx      # Recharts mini sparkline
@@ -115,18 +116,20 @@ as-price-watcher/
 │   │   ├── types.ts            # MilesPriceProvider interface
 │   │   └── seats-aero-provider.ts  # ACTIVE (no-ops without a key)
 │   ├── amadeus/client.ts       # UNUSED — reference only, see "Rejected Providers"
-│   ├── alerts.ts               # evaluateAlerts(), rolling avg logic
+│   ├── alerts.ts               # evaluateAlerts() — pure, no framework imports
+│   ├── watches.ts              # getWatchesWithPrices(), getWatchDetail()
 │   ├── email.ts                # Resend email template, sendAlertEmail()
 │   ├── supabase/
-│   │   ├── server.ts           # createSupabaseServerClient(), createSupabaseServiceClient()
+│   │   ├── server.ts           # Server / Route (dual-auth) / Service clients
 │   │   └── client.ts           # createSupabaseBrowserClient()
 │   └── utils.ts                # cn(), formatCash(), formatMiles(), formatDate(), pctChange()
-├── types/index.ts              # Watch, PriceCheck, Alert, CabinClass interfaces
-├── supabase/schema.sql         # Full DB schema — run this in Supabase SQL editor
+├── types/index.ts              # Itinerary, Watch, PriceCheck, Alert, CabinClass
+├── supabase/
+│   ├── schema.sql              # Canonical schema — for a FRESH database
+│   └── migrations/             # For an EXISTING database, run these
 ├── public/
 │   ├── manifest.json           # PWA manifest
 │   └── icons/                  # PWA icons
-├── vercel.json                 # Cron schedule: every 4 hours
 ├── .env.example                # All required env vars (template)
 ├── .env.local                  # NOT committed — create locally with real keys
 └── CLAUDE.md                   # This file
@@ -134,13 +137,9 @@ as-price-watcher/
 
 ## Database Schema (Supabase)
 
-Three tables with Row Level Security (RLS):
-
-**watches** — a user's saved route+date watch
-- id, user_id, origin, destination, depart_date, return_date (nullable), cabin_class, active, created_at
-
-**price_checks** — historical price snapshots (written by cron)
-- id, watch_id, checked_at, cash_price, currency, miles_price, flight_number, duration_minutes, stops
+> Superseded by migration 001. See **Data model — itineraries, watches,
+> price checks** below for the current shape and the reasoning. `watches` no
+> longer holds route or dates, and `price_checks` is keyed to an itinerary.
 
 **alerts** — log of sent alerts
 - id, watch_id, sent_at, trigger_type ('rolling_avg_drop' | 'all_time_low'), cash_price, miles_price, pct_change
@@ -154,7 +153,7 @@ Fires when EITHER:
 2. New all-time low for that watch
 
 Throttled: max 1 alert per watch per 24 hours (prevents spam during volatile pricing).
-Cron runs every 4 hours via Vercel.
+Cron runs daily via cron-job.org (13:00 UTC). Evaluation is per itinerary; delivery and the throttle are per watch.
 
 ## Environment Variables
 
@@ -552,62 +551,89 @@ flat, green for a drop, red for a rise. Both round first, so a 0.4% wobble
 counts as flat. `WatchCard` and the detail page both use the helper rather
 than inlining the ternary — that duplication is what let the two disagree.
 
-## Backlog: watch lifecycle and archiving
+## Data model — itineraries, watches, price checks
 
-Not broken — a design gap. Noted 2026-08-21, deliberately deferred.
+**Migration 001 (2026-08-24)** split the data model. Before, a `watch` held
+the route, the dates and the price history all at once. Now:
 
-### How it works today
-
-The cron deactivates a watch whose departure date has passed, *before*
-fetching, so an expired watch never costs a SerpApi search:
-
-```ts
-if (new Date(watch.depart_date) < new Date()) {
-  await supabase.from('watches').update({ active: false }).eq('id', watch.id)
-  continue
-}
+```
+itineraries   a priceable journey — route + dates + cabin. Shared.
+watches       one user's subscription to an itinerary. Has status.
+price_checks  belongs to the ITINERARY, not to any watcher.
+alerts        keyed to a WATCH — delivery is per user.
 ```
 
-`active = true` is then filtered in the cron, `/api/watches`, and the
-dashboard, so it stays excluded. Quota behaviour is correct.
+### Why: cost stops scaling with users
 
-### The gaps
+A search used to be issued per watch. Fifty people watching SEA→LAX on 12 Oct
+in economy meant fifty identical SerpApi calls. Now one itinerary = one check
+per run, however many people watch it. Cost tracks **distinct itineraries**,
+which is strongly sub-linear — new users mostly want routes someone already
+tracks.
 
-**1. `active` is overloaded.** Three unrelated events set `active = false` and
-afterwards are indistinguishable:
+### Alert grain: evaluate per itinerary, deliver per watch
 
-- departure date passed (auto-expiry)
-- user clicked "Remove watch" (soft delete)
-- user clicked unsubscribe in an alert email
+There is one price series per itinerary, so `evaluateAlerts()` runs once.
+Delivery then fans out: every active watch on that itinerary gets its own
+email, and the **24h throttle is applied per watch**. Two different grains in
+one loop — deliberate, and the thing to keep straight when editing the cron.
 
-**2. No archive view.** The dashboard filters `active = true`, so an expired
-watch vanishes along with all its collected price history. The data survives —
-`price_checks` rows remain, and `/watches/[id]` does *not* filter on `active`,
-so a bookmarked URL still renders the full chart — but nothing in the UI links
-there. For a price tracker this is the real loss: "what did this route do in
-the month before I flew" is the interesting question and it is currently only
-answerable if you saved the link.
+### `status` replaces `active`
 
-**3. No reactivation.** An accidental removal is permanent from the UI, though
-the row still exists.
+`active` meant three things (departure passed / user deleted / user
+unsubscribed) and afterwards they were indistinguishable.
 
-### If/when this is picked up, in value order
+| status | Set by |
+|---|---|
+| `active` | watch creation |
+| `expired` | the cron, when `depart_date` passes |
+| `removed` | `DELETE /api/watches/[id]` |
+| `unsubscribed` | the unsubscribe link in an alert email |
 
-- **Distinguish the three cases** — a `status` column
-  (`active` / `expired` / `removed` / `unsubscribed`) or a nullable
-  `deactivated_reason`. Cheap now; a migration once there is history worth
-  preserving.
-- **An archive view** — a dashboard section or `/watches/archive` listing
-  expired watches with their final price history. This is what converts a
-  hidden row into actual product value.
-- **Reactivate** — low value while single-user.
+Rows migrated from `active = false` became `removed` — the honest label for
+"deactivated, reason unknown", since it could not be recovered retroactively.
 
-### Minor timing note
+### Two gotchas worth knowing
 
-`new Date('2026-09-02')` parses as UTC midnight, so the 13:00 UTC cron
-deactivates on the *morning of* departure. An evening flight stops being
-tracked a few hours early. Probably desirable; documented so it isn't
-mistaken for a bug.
+**One-way dedup needs a functional index.** A plain `UNIQUE` would not
+deduplicate one-ways: Postgres treats NULLs as distinct, so every one-way
+would insert a fresh row. The unique index collapses null to `'infinity'`.
+
+**PostgREST types a nested to-one relation as an array** even though it
+returns a single object. `oneItinerary()` in `lib/watches.ts` and the cron
+normalises both shapes rather than casting past the type error.
+
+### Creating an itinerary
+
+Never a direct insert. `find_or_create_itinerary()` is SECURITY DEFINER, so
+users don't need INSERT on a table shared by everyone, and its exception
+handler resolves the race where two users create the same itinerary at once.
+Call it with `supabase.rpc('find_or_create_itinerary', {...})`.
+
+## Query logic lives in lib/, not in server components
+
+`lib/watches.ts` exports `getWatchesWithPrices()` and `getWatchDetail()`.
+Both take a Supabase client as an argument, so the same code runs from a
+server component (cookies), an API route (cookies or Bearer), or React Native
+(Bearer). Nothing in `lib/` imports from `next/*`.
+
+This is why: React Native cannot reuse a server component. Logic left inline
+in `app/dashboard/page.tsx` would have to be written twice and would drift.
+
+Both functions flatten the itinerary into the watch, so components keep
+reading `watch.origin` and never learn a join happened.
+
+## Backlog: archiving
+
+The `status` column now records *why* a watch stopped, but nothing surfaces
+it. Expired watches still vanish from the dashboard along with their price
+history — the data survives (`price_checks` belongs to the itinerary now, so
+it outlives the watch entirely) and `/watches/[id]` still renders, but
+nothing links there.
+
+Worth building: a dashboard section or `/watches/archive` listing non-active
+watches with their final history, labelled by status. `getWatchesWithPrices()`
+already accepts a `statuses` argument for exactly this.
 
 ## Roadmap: mobile (Expo / App Store) and multi-user
 
@@ -766,7 +792,7 @@ If you ever want to open this app to other users:
 
 6. **Supabase paid tier** — Free tier pauses projects after 1 week of inactivity. Paid tier ($25/month) keeps it always-on.
 
-7. **Vercel paid tier** — Free tier cron minimum interval is 1 day (daily), not every 4 hours. To run cron every 4 hours, you need Vercel Pro ($20/month). Alternative: use a free external cron service (cron-job.org) to call the endpoint instead.
+7. **Scheduling** — Vercel Hobby cron is daily-only, which is why cron-job.org drives it instead. If sub-daily is ever needed, Supabase `pg_cron` and Cloudflare Workers both do minute-level for free — better options than Vercel Pro.
 
 8. **Error monitoring** — Add Sentry (free tier) to catch API failures silently.
 

@@ -4,7 +4,22 @@
  */
 
 import { Resend } from 'resend'
-import type { Watch } from '@/types'
+import type { CabinClass } from '@/types'
+
+/**
+ * The email only needs the journey, not the subscription. Since route and
+ * dates moved onto `itineraries`, the caller passes a flattened view rather
+ * than a Watch row — which also keeps this file usable from anywhere that
+ * can describe a trip.
+ */
+export interface AlertEmailWatch {
+  id: string
+  origin: string
+  destination: string
+  depart_date: string
+  return_date: string | null
+  cabin_class: CabinClass
+}
 import type { AlertTrigger } from './alerts'
 import { formatDrop } from './alerts'
 
@@ -25,7 +40,7 @@ function formatCash(cash: number | null, currency = 'USD'): string {
   }).format(cash)
 }
 
-function alertHeadline(trigger: AlertTrigger, watch: Watch): string {
+function alertHeadline(trigger: AlertTrigger, watch: AlertEmailWatch): string {
   const route = `${watch.origin} → ${watch.destination}`
   if (trigger.type === 'new_low') {
     return `🔔 New price low: ${route} on ${watch.depart_date}`
@@ -37,7 +52,7 @@ function alertHeadline(trigger: AlertTrigger, watch: Watch): string {
 }
 
 function buildEmailHtml(params: {
-  watch: Watch
+  watch: AlertEmailWatch
   trigger: AlertTrigger
   alertId: string
 }): string {
@@ -127,7 +142,7 @@ function buildEmailHtml(params: {
 
 export async function sendAlertEmail(params: {
   to: string
-  watch: Watch
+  watch: AlertEmailWatch
   trigger: AlertTrigger
   alertId: string
 }): Promise<boolean> {

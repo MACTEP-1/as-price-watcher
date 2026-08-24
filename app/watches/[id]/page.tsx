@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getWatchDetail } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
@@ -19,14 +20,12 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: watch } = await supabase.from('watches').select('*').eq('id', id).eq('user_id', user.id).single()
-  if (!watch) notFound()
+  // Route, dates and cabin now live on the itinerary; getWatchDetail joins
+  // and flattens them so this page reads the same as before.
+  const detail = await getWatchDetail(supabase, id, user.id)
+  if (!detail) notFound()
 
-  const { data: history } = await supabase
-    .from('price_checks').select('*').eq('watch_id', id)
-    .order('checked_at', { ascending: true }).limit(90)
-
-  const checks = (history ?? []) as PriceCheck[]
+  const { watch, checks } = detail
   const latest = checks[checks.length - 1]
   const prev = checks[checks.length - 2]
 

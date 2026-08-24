@@ -10,10 +10,11 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Soft-delete (set active = false)
+  // Soft delete. `status` distinguishes this from an expiry or an
+  // unsubscribe — an `active` boolean could not.
   const { error } = await supabase
     .from('watches')
-    .update({ active: false })
+    .update({ status: 'removed' })
     .eq('id', id)
     .eq('user_id', user.id)
 

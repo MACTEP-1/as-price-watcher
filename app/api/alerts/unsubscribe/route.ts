@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   // Soft-delete the watch (stop watching = stop alerts)
   await supabase
     .from('watches')
-    .update({ active: false })
+    .update({ status: 'unsubscribed' })
     .eq('id', watchId)
 
   return new NextResponse(
