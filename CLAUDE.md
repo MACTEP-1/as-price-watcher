@@ -118,6 +118,7 @@ as-price-watcher/
 │   ├── amadeus/client.ts       # UNUSED — reference only, see "Rejected Providers"
 │   ├── alerts.ts               # evaluateAlerts() — pure, no framework imports
 │   ├── watches.ts              # getWatchesWithPrices(), getWatchDetail()
+│   ├── config.ts               # SEARCH_MAX_DAYS — shared client+server, non-secret
 │   ├── email.ts                # Resend email template, sendAlertEmail()
 │   ├── supabase/
 │   │   ├── server.ts           # Server / Route (dual-auth) / Service clients
@@ -175,7 +176,7 @@ SEATS_AERO_KEY=
 SEATS_AERO_SOURCES=alaska
 
 # Max days per /api/search request — each day costs one SerpApi search
-SEARCH_MAX_DAYS=5
+NEXT_PUBLIC_SEARCH_MAX_DAYS=5
 
 # Resend — from resend.com (need verified domain for production)
 RESEND_API_KEY=re_...
@@ -295,7 +296,7 @@ Mark **Sensitive** in Vercel: `SUPABASE_SERVICE_ROLE_KEY`, `SERPAPI_KEY`,
 
 Leave **plain**: everything `NEXT_PUBLIC_*` (it ships in the browser bundle
 regardless, so hiding it buys nothing and makes it impossible to verify),
-plus config values like `ALERT_FROM_EMAIL`, `SEARCH_MAX_DAYS`,
+plus config values like `ALERT_FROM_EMAIL`, `NEXT_PUBLIC_SEARCH_MAX_DAYS`,
 `SERPAPI_STRICT_AS`.
 
 Sensitive vars are **write-only** — Vercel never decrypts them for the
@@ -332,7 +333,7 @@ provider's dashboard, then **delete the old key there**. Prefer Rotate over
 Edit for these — the note and the checkbox are the point.
 
 ⚠️ Rotate appears to store the new value as **Sensitive**. Don't use it on a
-plain config var like `SEARCH_MAX_DAYS` — you'd convert a readable value into
+plain config var like `NEXT_PUBLIC_SEARCH_MAX_DAYS` — you'd convert a readable value into
 a write-only one and only delete-and-re-add would undo it.
 
 ### Rotating `CRON_SECRET`
@@ -533,9 +534,32 @@ always blank without `SEATS_AERO_KEY`. Now reads:
 
 > Search cash prices across a date range — sign in to search and save watches
 
-Still unstated, and worth adding if the page is touched again: a range costs
-**one SerpApi search per day in it**, capped at `SEARCH_MAX_DAYS` (5), out of
-250/month.
+The page also shows a live cost line above the Search button — "Checks 3
+dates — 3 lookups", or "Checks the first 5 of 14 dates" when the range
+exceeds the cap. Better than a static warning: it says what *this* search
+costs before you click.
+
+The cap is defined **once**, in `lib/config.ts`:
+
+```ts
+export const SEARCH_MAX_DAYS = Math.max(
+  1, parseInt(process.env.NEXT_PUBLIC_SEARCH_MAX_DAYS ?? '5', 10)
+)
+```
+
+Both `app/api/search/route.ts` (which enforces it) and `app/page.tsx` (which
+displays it) import that. The warning therefore cannot disagree with the
+limit.
+
+`NEXT_PUBLIC_` is deliberate: the browser has to read it. That is safe —
+knowing the cap grants no advantage, and the API route applies it regardless
+of what any client believes. Verified that Next actually inlines it by
+building with two different values and inspecting the client chunk.
+
+**`lib/config.ts` is for shared, non-secret config only.** Anything
+`NEXT_PUBLIC_` is visible to everyone; secrets stay in server-only vars read
+where they are used. Also note Next only inlines
+`process.env.NEXT_PUBLIC_*` when written literally — never destructure it.
 
 ### Flat prices are not increases
 

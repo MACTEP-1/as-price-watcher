@@ -5,7 +5,8 @@ Track Alaska Airlines flight prices — cash fares via Google Flights, award mil
 ## How it works
 
 - Add a route watch (e.g. SEA → LAX, Oct 12, Economy)
-- Every 4 hours a cron job fetches the current best Alaska fare and, if miles tracking is enabled, the lowest saver award price
+- Once a day a cron job fetches the current best Alaska fare and, if miles tracking is enabled, the lowest saver award price
+- Several people watching the same trip share one price check — cost scales with distinct itineraries, not with users
 - You get an email alert when the price drops ≥10% from the 7-day rolling average, or hits a new all-time low for that route
 - The detail page shows cash and miles history on the same chart with low/avg/high stats
 
@@ -14,7 +15,7 @@ Track Alaska Airlines flight prices — cash fares via Google Flights, award mil
 | Service | Purpose | Tier |
 |---------|---------|------|
 | [Vercel](https://vercel.com) | Next.js hosting | Hobby (free) |
-| [cron-job.org](https://cron-job.org) | 4-hourly scheduler | Free |
+| [cron-job.org](https://cron-job.org) | Daily scheduler (13:00 UTC) | Free |
 | [Supabase](https://supabase.com) | Postgres DB + Auth | Free — 500 MB, 50k MAU |
 | [SerpApi](https://serpapi.com) | Cash flight prices | Free — 250 searches/mo |
 | [seats.aero](https://seats.aero) | Award/miles prices | **Optional** — Pro ~$9.99/mo |
@@ -42,16 +43,17 @@ Everything except seats.aero runs on a free tier. Miles tracking is opt-in: with
 2. Copy your private API key into `SERPAPI_KEY`
 
 **Watch your quota.** The free tier is 250 searches/month, shared between the
-cron job and on-site search. One search = one date, per active watch:
+cron job and on-site search. One search = one **itinerary** per cron tick —
+not one per watch, so N users tracking the same trip cost one call:
 
-| Cron interval | per day | per month | watches on free tier |
+| Cron interval | per day | per month | itineraries on free tier |
 |---|---|---|---|
-| every 4h | 6 | ~180 | 1 |
-| every 6h | 4 | ~120 | 2 |
+| daily (current) | 1 | ~30 | 8 |
 | every 12h | 2 | ~60 | 4 |
+| every 6h | 4 | ~120 | 2 |
 
-Adjust the schedule in cron-job.org when you add watches, or move to SerpApi
-Starter ($25/mo, 1,000 searches).
+Adjust the schedule in cron-job.org, or move to SerpApi Starter ($25/mo,
+1,000 searches).
 
 ### 3. seats.aero (miles prices — optional)
 
@@ -99,16 +101,17 @@ Variables), for **Production and Preview**.
 
 ### 8. Schedule the cron
 
-Vercel's Hobby plan caps cron jobs at **once daily**, so the 4-hourly schedule
-runs from an external caller instead:
+Scheduling runs from an external caller rather than Vercel:
 
 1. Create a job at [cron-job.org](https://cron-job.org)
 2. URL: `https://<your-app>.vercel.app/api/cron/check-prices`
-3. Schedule: every 4 hours (`0 */4 * * *`)
+3. Schedule: daily (`0 13 * * *`)
 4. Under **Advanced**, add header `Authorization: Bearer <CRON_SECRET>`
 
-`vercel.json` still carries a cron entry; it is harmless but only fires daily
-on Hobby.
+⚠️ **There is deliberately no `vercel.json`.** It used to declare a cron of
+its own, and because Vercel injects `Authorization: Bearer $CRON_SECRET`
+automatically, that entry authenticated fine and fired every day at 00:00 UTC
+alongside this one — silently doubling SerpApi usage. Do not re-add it.
 
 ---
 
@@ -164,7 +167,7 @@ populated. **Deleted** — do not reinstate without a real browser network trace
 ## Search endpoint is authenticated
 
 `POST /api/search` requires a signed-in Supabase user and caps the date range
-at `SEARCH_MAX_DAYS` (default 5). Each date in a range costs one real SerpApi
+at `NEXT_PUBLIC_SEARCH_MAX_DAYS` (default 5). Each date in a range costs one real SerpApi
 search, so an open, uncapped endpoint could drain a month of free quota in a
 couple of page loads.
 
@@ -199,6 +202,8 @@ components/
   PriceSparkline.tsx    — Mini chart for dashboard cards
   PriceHistoryChart.tsx — Full chart for detail page
 lib/
+  config.ts             — SEARCH_MAX_DAYS, shared client + server
+  watches.ts            — getWatchesWithPrices(), getWatchDetail()
   flights/              — CASH prices, swappable provider
     index.ts            — ← the one place to switch provider
     types.ts            — FlightPriceProvider interface
@@ -218,7 +223,6 @@ supabase/
   schema.sql            — Run once in Supabase SQL editor
 docs/                   — Design notes and provider decisions
 types/index.ts
-vercel.json             — Daily cron fallback (Hobby limit)
 ```
 
 ## Styling note

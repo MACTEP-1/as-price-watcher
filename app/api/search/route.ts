@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice } from '@/lib/miles'
 import { createSupabaseRouteClient } from '@/lib/supabase/server'
+import { SEARCH_MAX_DAYS } from '@/lib/config'
 import type { CabinClass } from '@/types'
 
 /**
@@ -10,9 +11,12 @@ import type { CabinClass } from '@/types'
  * 250 searches/month TOTAL — shared with the cron job. An unauthenticated,
  * uncapped version of this endpoint would drain a month's quota in a couple
  * of page loads, so it now (a) requires a signed-in user and (b) caps the
- * range at SEARCH_MAX_DAYS (default 5).
+ * range at SEARCH_MAX_DAYS.
+ *
+ * That constant lives in lib/config.ts and is shared with the homepage, which
+ * displays the cost of a search before you run it. One definition, so the
+ * warning can never disagree with the limit this route enforces.
  */
-const MAX_DAYS = Math.max(1, parseInt(process.env.SEARCH_MAX_DAYS ?? '5', 10))
 
 export interface SearchResult {
   date: string
@@ -50,7 +54,7 @@ export async function POST(req: NextRequest) {
   // Cap the range — each day is one paid API search.
   const diffDays = Math.min(
     Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1),
-    MAX_DAYS
+    SEARCH_MAX_DAYS
   )
 
   for (let i = 0; i < diffDays; i++) {

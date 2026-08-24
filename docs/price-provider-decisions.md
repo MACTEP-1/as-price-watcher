@@ -106,7 +106,7 @@ It swallowed every error and returned null, so miles silently never populated.
 `POST /api/search` was unauthenticated and fanned out up to **14 SerpApi
 searches per request**. Two page loads would have drained a month of free
 quota, and anyone could hit it. Now requires a signed-in Supabase user and
-caps the range at `SEARCH_MAX_DAYS` (default 5).
+caps the range at `NEXT_PUBLIC_SEARCH_MAX_DAYS` (default 5), defined once in lib/config.ts.
 
 ## Known issue — alert noise at low history
 
@@ -127,7 +127,7 @@ SERPAPI_KEY=...
 SERPAPI_STRICT_AS=false     # optional
 SEATS_AERO_KEY=...          # optional — omit to disable miles
 SEATS_AERO_SOURCES=alaska   # optional
-SEARCH_MAX_DAYS=5           # optional
+NEXT_PUBLIC_SEARCH_MAX_DAYS=5   # optional
 ```
 
 ## Still open
