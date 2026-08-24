@@ -434,11 +434,16 @@ export default function Home() {
 
             {error && <p style={{ color: '#dc2626', fontSize: '14px', margin: '0 0 12px' }}>{error}</p>}
 
-            <p style={{ margin: '0 0 10px', fontSize: '12px', color: capped ? '#b45309' : '#9ca3af' }}>
-              {capped
-                ? `Checks the first ${searchedDays} of ${requestedDays} dates — ${searchedDays} lookups. Narrow the range to choose which.`
-                : `Checks ${searchedDays} ${searchedDays === 1 ? 'date' : 'dates'} — ${searchedDays} ${searchedDays === 1 ? 'lookup' : 'lookups'}.`}
-            </p>
+            {/* Nothing to forecast until a departure date exists — the field
+                is required, so a cost line before that predicts a search the
+                user cannot yet run. */}
+            {startDate && (
+              <p style={{ margin: '0 0 10px', fontSize: '12px', color: capped ? '#b45309' : '#9ca3af' }}>
+                {capped
+                  ? `Checks the first ${searchedDays} of ${requestedDays} dates — ${searchedDays} lookups. Narrow the range to choose which.`
+                  : `Checks ${searchedDays} ${searchedDays === 1 ? 'date' : 'dates'} — ${searchedDays} ${searchedDays === 1 ? 'lookup' : 'lookups'}.`}
+              </p>
+            )}
 
             <button type="submit" disabled={loading} style={s.searchBtn}>
               {loading ? 'Searching…' : 'Search flights'}
