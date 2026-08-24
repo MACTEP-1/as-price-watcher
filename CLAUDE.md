@@ -446,6 +446,43 @@ in every one.
   this file that look like bash are macOS/Git-Bash; PowerShell equivalents are
   noted where they differ.
 
+## Scheduling — there is no vercel.json, on purpose
+
+**Do not re-add a `crons` block to `vercel.json`.** The project deliberately has
+no `vercel.json` at all.
+
+The original design used Vercel Cron. When Hobby's once-daily limit was hit, an
+external scheduler (cron-job.org, 13:00 UTC) was added — but the `vercel.json`
+entry was never removed, and **Vercel automatically injects
+`Authorization: Bearer $CRON_SECRET` when that env var exists**. So Vercel's
+cron kept authenticating successfully and firing at 00:00 UTC alongside the
+external one.
+
+Confirmed 2026-08-24 by bucketing `price_checks`:
+
+```
+Aug 23  00:00 UTC  ← Vercel
+Aug 23  13:00 UTC  ← cron-job.org
+Aug 24  00:00 UTC  ← Vercel
+Aug 24  13:00 UTC  ← cron-job.org
+```
+
+Two clean pairs a day. Every watch was costing **two SerpApi searches daily**,
+not one — 60/month instead of 30, halving how many watches fit in the free
+tier. Fixed by deleting `vercel.json`.
+
+cron-job.org is the one to keep: it can go sub-daily if quota ever allows,
+which Hobby cron cannot.
+
+To verify the schedule at any point:
+
+```sql
+select date_trunc('hour', checked_at) as hour_utc, count(*)
+from price_checks group by 1 order by 1;
+```
+
+One bucket per day is correct. Two means something is double-firing again.
+
 ## Trip type — one-way vs round trip
 
 **There is no `trip_type` column, deliberately.** `return_date IS NULL` means
