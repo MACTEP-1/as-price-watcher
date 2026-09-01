@@ -1,0 +1,21 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    // lib/watches.ts imports its types as "@/types", using the Next.js
+    // app's own alias (@/* -> repo root, see ../tsconfig.json). Mirroring
+    // it here — one level up, since this file lives in mobile/ — lets the
+    // shared file resolve without any changes on either side.
+    "paths": {
+      "@/*": ["../*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "../types/**/*.ts",
+    "../lib/watches.ts"
+  ]
+}
