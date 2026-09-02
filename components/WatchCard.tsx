@@ -49,7 +49,7 @@ export default function WatchCard({ watch, onDelete }: Props) {
         <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
             <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cash</p>
-            <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0060ac' }}>{formatCash(watch.latest_cash)}</p>
+            <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: watch.latest_cash !== null ? '#0060ac' : '#94a3b8' }}>{formatCash(watch.latest_cash)}</p>
             {cashChange !== null && (
               <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: changeColor(cashChange) }}>
                 {formatPctChange(cashChange)} vs prev
@@ -64,7 +64,7 @@ export default function WatchCard({ watch, onDelete }: Props) {
 
           <div>
             <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Miles</p>
-            <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#00a551' }}>{formatMiles(watch.latest_miles)}</p>
+            <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: watch.latest_miles !== null ? '#00a551' : '#94a3b8' }}>{formatMiles(watch.latest_miles)}</p>
             {milesChange !== null && (
               <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: changeColor(milesChange) }}>
                 {formatPctChange(milesChange)} vs prev

@@ -69,7 +69,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
             <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {watch.return_date ? 'Cash price · round trip' : 'Cash price · one-way'}
             </p>
-            <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: '#0060ac' }}>{formatCash(latest?.cash_price ?? null)}</p>
+            <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: (latest?.cash_price ?? null) !== null ? '#0060ac' : '#94a3b8' }}>{formatCash(latest?.cash_price ?? null)}</p>
             {cashChange !== null && (
               <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: changeColor(cashChange) }}>
                 {formatPctChange(cashChange)} since last check
@@ -82,7 +82,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
 
           <div style={card}>
             <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Miles price</p>
-            <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: '#00a551' }}>{formatMiles(latest?.miles_price ?? null)}</p>
+            <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: (latest?.miles_price ?? null) !== null ? '#00a551' : '#94a3b8' }}>{formatMiles(latest?.miles_price ?? null)}</p>
             {milesChange !== null && (
               <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: changeColor(milesChange) }}>
                 {formatPctChange(milesChange)} since last check

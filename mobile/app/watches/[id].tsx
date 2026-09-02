@@ -96,7 +96,11 @@ export default function WatchDetailScreen() {
         <View style={styles.grid}>
           <View style={styles.col}>
             <Text style={styles.microLabel}>Cash</Text>
-            <Text style={styles.cash}>{formatCash(watch.latest_cash)}</Text>
+            <Text
+              style={[styles.cash, watch.latest_cash === null && styles.priceMuted]}
+            >
+              {formatCash(watch.latest_cash)}
+            </Text>
             {cashChange !== null && (
               <Text style={[styles.change, { color: changeColor(cashChange) }]}>
                 {formatPctChange(cashChange)} vs prev
@@ -105,7 +109,11 @@ export default function WatchDetailScreen() {
           </View>
           <View style={styles.col}>
             <Text style={styles.microLabel}>Miles</Text>
-            <Text style={styles.miles}>{formatMiles(watch.latest_miles)}</Text>
+            <Text
+              style={[styles.miles, watch.latest_miles === null && styles.priceMuted]}
+            >
+              {formatMiles(watch.latest_miles)}
+            </Text>
             {milesChange !== null && (
               <Text style={[styles.change, { color: changeColor(milesChange) }]}>
                 {formatPctChange(milesChange)} vs prev
@@ -176,6 +184,9 @@ const styles = StyleSheet.create({
   },
   cash: { fontSize: 28, fontWeight: '700', color: '#0060ac' },
   miles: { fontSize: 28, fontWeight: '700', color: '#00a551' },
+  // Overrides cash/miles color when there's no price yet — see the same
+  // style in app/index.tsx for why.
+  priceMuted: { color: '#94a3b8' },
   change: { fontSize: 12, fontWeight: '500', marginTop: 3 },
   sectionTitle: {
     fontSize: 15,

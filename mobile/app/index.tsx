@@ -121,7 +121,12 @@ export default function DashboardScreen() {
                 <View style={styles.grid}>
                   <View style={styles.col}>
                     <Text style={styles.microLabel}>Cash</Text>
-                    <Text style={styles.cash}>
+                    <Text
+                      style={[
+                        styles.cash,
+                        item.latest_cash === null && styles.priceMuted,
+                      ]}
+                    >
                       {formatCash(item.latest_cash)}
                     </Text>
                     {cashChange !== null && (
@@ -134,7 +139,12 @@ export default function DashboardScreen() {
                   </View>
                   <View style={styles.col}>
                     <Text style={styles.microLabel}>Miles</Text>
-                    <Text style={styles.miles}>
+                    <Text
+                      style={[
+                        styles.miles,
+                        item.latest_miles === null && styles.priceMuted,
+                      ]}
+                    >
                       {formatMiles(item.latest_miles)}
                     </Text>
                     {milesChange !== null && (
@@ -227,6 +237,11 @@ const styles = StyleSheet.create({
   },
   cash: { fontSize: 22, fontWeight: '700', color: '#0060ac' },
   miles: { fontSize: 22, fontWeight: '700', color: '#00a551' },
+  // Overrides cash/miles color when there's no price yet — a bare "—"
+  // rendered in the active blue/green reads as a rendering glitch, not
+  // "no data" (miles_price is null both while seats.aero is unconfigured
+  // and, once it is, whenever no saver award space exists for that route).
+  priceMuted: { color: '#94a3b8' },
   change: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   footer: {
     paddingVertical: 10,
