@@ -177,11 +177,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    // See mobile/app/index.tsx's card style for why this is boxShadow, not
+    // shadow*/elevation.
+    boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
   },
   cardBody: { padding: 18 },
   routeRow: {

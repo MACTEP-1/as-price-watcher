@@ -304,11 +304,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    // See mobile/app/index.tsx's card style for why this is boxShadow, not
+    // shadow*/elevation.
+    boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
   },
   label: {
     fontSize: 12,
@@ -376,11 +374,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#0060ac',
     alignItems: 'center',
-    shadowColor: '#0060ac',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 3,
+    boxShadow: '0 4px 10px rgba(0,96,172,0.25)',
   },
   submitDisabled: { opacity: 0.7 },
   submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },

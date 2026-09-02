@@ -206,13 +206,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
     overflow: 'hidden',
-    // RN's shadow* props are iOS-only; elevation covers Android. Same
-    // silhouette as the web card's `0 1px 4px rgba(0,0,0,0.08)`.
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    // boxShadow (not the old shadow*/elevation split) — Expo SDK 57 runs
+    // exclusively on React Native's New Architecture, which is what
+    // boxShadow requires; the old shadow* props are deprecated on web
+    // (confirmed via a real console warning) and were only ever an iOS-only
+    // approximation anyway. Same literal string as the web card's inline
+    // `boxShadow: '0 1px 4px rgba(0,0,0,0.08)'`, not a translation of it.
+    boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
   },
   cardBody: { padding: 18 },
   routeRow: {

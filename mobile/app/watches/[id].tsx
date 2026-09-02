@@ -164,11 +164,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    // See app/index.tsx's card style for why this is boxShadow, not
+    // shadow*/elevation.
+    boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
   },
   route: { fontSize: 22, fontWeight: '700', color: '#0f172a' },
   meta: { fontSize: 13, color: '#64748b', marginTop: 4 },
@@ -201,11 +199,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
   },
   row: {
     flexDirection: 'row',
