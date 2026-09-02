@@ -131,7 +131,7 @@ export default function NewWatchScreen() {
   }
 
   const sameDayReturn =
-    isRoundTrip && form.returnDate && form.returnDate === form.departDate
+    isRoundTrip && !!form.returnDate && form.returnDate === form.departDate
 
   return (
     <ScrollView
