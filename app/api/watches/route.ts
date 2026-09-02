@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseRouteClient } from '@/lib/supabase/server'
+import { createSupabaseRouteClient, createSupabaseServiceClient } from '@/lib/supabase/server'
 import { getWatchesWithPrices } from '@/lib/watches'
+import { getCheapestFare } from '@/lib/flights'
+import { getCheapestMilesPrice } from '@/lib/miles'
+import type { CabinClass } from '@/types'
 
 export async function GET() {
   const supabase = await createSupabaseRouteClient()
@@ -104,5 +107,69 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // ── First price check, right now ────────────────────────────────────
+  // A brand-new watch otherwise shows nothing until tomorrow's cron run —
+  // an unfriendly first impression. Only worth doing (and only worth the
+  // SerpApi quota) when this itinerary has no history yet; if it's shared
+  // with an existing watcher, their price data already answers the same
+  // question for free. `itineraryId` here is never arbitrary user input —
+  // it's the id this exact request just had RLS confirm belongs to the
+  // watch it created a moment ago, via the normal user-scoped client. The
+  // service-role client below is used ONLY for the one insert that requires
+  // it (price_checks has no insert policy for regular users — see
+  // supabase/schema.sql), never for anything shaped by what the caller sent.
+  //
+  // Best-effort: if this fails for any reason, the watch is already created
+  // and saved — surfacing that failure to the client would be worse than
+  // just falling back to "wait for the next cron run," so this only logs.
+  try {
+    const { count } = await supabase
+      .from('price_checks')
+      .select('id', { count: 'exact', head: true })
+      .eq('itinerary_id', itineraryId)
+
+    if (!count) {
+      const [cashResult, milesResult] = await Promise.allSettled([
+        getCheapestFare({
+          origin,
+          destination,
+          departDate,
+          returnDate: normalisedReturn,
+          cabinClass: (cabinClass ?? 'economy') as CabinClass,
+        }),
+        getCheapestMilesPrice({
+          origin,
+          destination,
+          departDate,
+          cabinClass: (cabinClass ?? 'economy') as CabinClass,
+        }),
+      ])
+
+      const cash = cashResult.status === 'fulfilled' ? cashResult.value : null
+      const miles = milesResult.status === 'fulfilled' ? milesResult.value : null
+
+      const serviceClient = createSupabaseServiceClient()
+      const { error: checkInsertError } = await serviceClient
+        .from('price_checks')
+        .insert({
+          itinerary_id: itineraryId,
+          cash_price: cash?.cashPrice ?? null,
+          cash_currency: cash?.currency ?? 'USD',
+          miles_price: miles?.milesPrice ?? null,
+          airline: 'AS',
+          flight_number: cash?.flightNumber ?? null,
+          duration_minutes: cash?.durationMinutes ?? null,
+          stops: cash?.stops ?? 0,
+        })
+
+      if (checkInsertError) {
+        console.error('[watches] immediate price check insert failed:', checkInsertError)
+      }
+    }
+  } catch (err) {
+    console.error('[watches] immediate price check failed:', err)
+  }
+
   return NextResponse.json(data, { status: 201 })
 }
