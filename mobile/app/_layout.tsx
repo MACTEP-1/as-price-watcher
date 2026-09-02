@@ -47,6 +47,12 @@ export default function RootLayout() {
   }, [])
 
   useEffect(() => {
+    Linking.getInitialURL().then(handleUrl)
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
+    return () => sub.remove()
+  }, [handleUrl])
+
+  useEffect(() => {
     if (!ready) return
 
     // auth-callback counts as "in the auth flow" alongside login: while

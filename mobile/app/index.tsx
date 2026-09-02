@@ -56,9 +56,14 @@ export default function DashboardScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Your watches</Text>
-        <Pressable onPress={signOut}>
-          <Text style={styles.signOut}>Sign out</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={() => router.push('/watches/new')} hitSlop={8}>
+            <Text style={styles.newWatch}>+ New</Text>
+          </Pressable>
+          <Pressable onPress={signOut} hitSlop={8}>
+            <Text style={styles.signOut}>Sign out</Text>
+          </Pressable>
+        </View>
       </View>
 
       <FlatList
@@ -107,6 +112,8 @@ const styles = StyleSheet.create({
     paddingTop: 56,
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#0f172a' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  newWatch: { color: '#0060ac', fontSize: 14, fontWeight: '600' },
   signOut: { color: '#0060ac', fontSize: 14 },
   empty: { textAlign: 'center', color: '#94a3b8', marginTop: 40 },
   card: {
