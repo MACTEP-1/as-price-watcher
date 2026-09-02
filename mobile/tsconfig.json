@@ -16,6 +16,7 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "../types/**/*.ts",
-    "../lib/watches.ts"
+    "../lib/watches.ts",
+    "../lib/format.ts"
   ]
 }

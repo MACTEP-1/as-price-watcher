@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { getWatchDetail } from '../../../lib/watches'
 import type { PriceCheck, WatchWithLatestPrice } from '../../../types'
+import {
+  formatCash,
+  formatMiles,
+  formatDate,
+  pctChange,
+  formatPctChange,
+  changeColor,
+} from '../../../lib/format'
 
 export default function WatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
+  const router = useRouter()
   const [watch, setWatch] = useState<WatchWithLatestPrice | null>(null)
   const [checks, setChecks] = useState<PriceCheck[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,41 +57,91 @@ export default function WatchDetailScreen() {
     )
   }
 
+  const cashChange = pctChange(watch.latest_cash, watch.prev_cash)
+  const milesChange = pctChange(watch.latest_miles, watch.prev_miles)
+
+  // "New low" badge: a check whose cash price is lower than every check
+  // before it. Only meaningful once there's a prior price to beat, so the
+  // very first check never gets one.
+  const chronological = checks.slice()
+  let runningMin = Infinity
+  const newLowIds = new Set<string>()
+  chronological.forEach((c, i) => {
+    if (c.cash_price != null) {
+      if (i > 0 && c.cash_price < runningMin) newLowIds.add(c.id)
+      runningMin = Math.min(runningMin, c.cash_price)
+    }
+  })
+
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ padding: 16, paddingTop: 56 }}
+      contentContainerStyle={{ padding: 20, paddingTop: 56, paddingBottom: 40 }}
     >
-      <Text style={styles.route}>
-        {watch.origin} → {watch.destination}
-      </Text>
-      <Text style={styles.date}>
-        {watch.depart_date}
-        {watch.return_date ? ` – ${watch.return_date}` : ' (one-way)'}
-      </Text>
-      <Text style={styles.price}>
-        {watch.latest_cash != null ? `$${watch.latest_cash}` : '—'}
-        {watch.latest_miles != null
-          ? `  ·  ${watch.latest_miles.toLocaleString()} mi`
-          : ''}
-      </Text>
+      <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Text style={styles.back}>‹ Back</Text>
+      </Pressable>
+
+      <View style={styles.heroCard}>
+        <Text style={styles.route}>
+          {watch.origin} → {watch.destination}
+        </Text>
+        <Text style={styles.meta}>
+          {formatDate(watch.depart_date)}
+          {watch.return_date ? ` – ${formatDate(watch.return_date)}` : ' · one-way'}
+          {' · '}
+          <Text style={styles.metaCabin}>{watch.cabin_class.replace('_', ' ')}</Text>
+        </Text>
+
+        <View style={styles.grid}>
+          <View style={styles.col}>
+            <Text style={styles.microLabel}>Cash</Text>
+            <Text style={styles.cash}>{formatCash(watch.latest_cash)}</Text>
+            {cashChange !== null && (
+              <Text style={[styles.change, { color: changeColor(cashChange) }]}>
+                {formatPctChange(cashChange)} vs prev
+              </Text>
+            )}
+          </View>
+          <View style={styles.col}>
+            <Text style={styles.microLabel}>Miles</Text>
+            <Text style={styles.miles}>{formatMiles(watch.latest_miles)}</Text>
+            {milesChange !== null && (
+              <Text style={[styles.change, { color: changeColor(milesChange) }]}>
+                {formatPctChange(milesChange)} vs prev
+              </Text>
+            )}
+          </View>
+        </View>
+      </View>
 
       <Text style={styles.sectionTitle}>
-        Price history ({checks.length} checks)
+        Price history ({checks.length} check{checks.length !== 1 ? 's' : ''})
       </Text>
-      {checks
-        .slice()
-        .reverse()
-        .map((c) => (
-          <View key={c.id} style={styles.row}>
-            <Text style={styles.rowDate}>
-              {new Date(c.checked_at).toLocaleDateString()}
-            </Text>
-            <Text style={styles.rowPrice}>
-              {c.cash_price != null ? `$${c.cash_price}` : '—'}
-            </Text>
-          </View>
-        ))}
+
+      <View style={styles.historyCard}>
+        {checks
+          .slice()
+          .reverse()
+          .map((c, i, arr) => (
+            <View
+              key={c.id}
+              style={[styles.row, i === arr.length - 1 && styles.rowLast]}
+            >
+              <Text style={styles.rowDate}>
+                {new Date(c.checked_at).toLocaleDateString()}
+              </Text>
+              <View style={styles.rowPriceWrap}>
+                {newLowIds.has(c.id) && (
+                  <Text style={styles.badge}>NEW LOW</Text>
+                )}
+                <Text style={styles.rowCash}>
+                  {c.cash_price != null ? `$${c.cash_price}` : '—'}
+                </Text>
+              </View>
+            </View>
+          ))}
+      </View>
     </ScrollView>
   )
 }
@@ -90,23 +149,74 @@ export default function WatchDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  back: { color: '#0060ac', fontSize: 15, marginBottom: 18 },
+  heroCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   route: { fontSize: 22, fontWeight: '700', color: '#0f172a' },
-  date: { fontSize: 14, color: '#64748b', marginTop: 4 },
-  price: { fontSize: 18, fontWeight: '600', color: '#0060ac', marginTop: 12 },
+  meta: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  metaCabin: { textTransform: 'capitalize' },
+  grid: { marginTop: 18, flexDirection: 'row', gap: 20 },
+  col: { flex: 1 },
+  microLabel: {
+    fontSize: 11,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  cash: { fontSize: 28, fontWeight: '700', color: '#0060ac' },
+  miles: { fontSize: 28, fontWeight: '700', color: '#00a551' },
+  change: { fontSize: 12, fontWeight: '500', marginTop: 3 },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#0f172a',
-    marginTop: 24,
-    marginBottom: 8,
+    marginTop: 28,
+    marginBottom: 12,
+  },
+  historyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    alignItems: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#f1f5f9',
   },
+  rowLast: { borderBottomWidth: 0 },
   rowDate: { color: '#64748b', fontSize: 13 },
-  rowPrice: { color: '#0f172a', fontSize: 14, fontWeight: '600' },
+  rowPriceWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowCash: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
+  badge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#16a34a',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    overflow: 'hidden',
+  },
 })

@@ -144,7 +144,8 @@ export default function NewWatchScreen() {
 
       <Text style={styles.title}>Watch a route</Text>
 
-      <Text style={styles.label}>Popular routes</Text>
+      <View style={styles.card}>
+      <Text style={[styles.label, styles.labelFirst]}>Popular routes</Text>
       <View style={styles.pillRow}>
         {POPULAR_ROUTES.map((r) => {
           const active = form.origin === r.o && form.destination === r.d
@@ -185,7 +186,7 @@ export default function NewWatchScreen() {
 
       <View style={styles.row}>
         <View style={styles.half}>
-          <Text style={styles.label}>From (IATA)</Text>
+          <Text style={styles.fieldLabel}>From (IATA)</Text>
           <TextInput
             style={styles.input}
             value={form.origin}
@@ -198,7 +199,7 @@ export default function NewWatchScreen() {
           />
         </View>
         <View style={styles.half}>
-          <Text style={styles.label}>To (IATA)</Text>
+          <Text style={styles.fieldLabel}>To (IATA)</Text>
           <TextInput
             style={styles.input}
             value={form.destination}
@@ -214,7 +215,7 @@ export default function NewWatchScreen() {
 
       <View style={styles.row}>
         <View style={isRoundTrip ? styles.half : styles.full}>
-          <Text style={styles.label}>Depart date</Text>
+          <Text style={styles.fieldLabel}>Depart date</Text>
           <TextInput
             style={styles.input}
             value={form.departDate}
@@ -227,7 +228,7 @@ export default function NewWatchScreen() {
         </View>
         {isRoundTrip && (
           <View style={styles.half}>
-            <Text style={styles.label}>Return date</Text>
+            <Text style={styles.fieldLabel}>Return date</Text>
             <TextInput
               style={styles.input}
               value={form.returnDate}
@@ -267,6 +268,7 @@ export default function NewWatchScreen() {
           )
         })}
       </View>
+      </View>
 
       {!!error && (
         <View style={styles.errorBanner}>
@@ -296,13 +298,29 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   back: { color: '#0060ac', fontSize: 15, marginBottom: 16 },
   title: { fontSize: 24, fontWeight: '700', color: '#0f172a', marginBottom: 20 },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
-    marginBottom: 6,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
     marginTop: 16,
   },
+  labelFirst: { marginTop: 0 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6 },
   row: { flexDirection: 'row', gap: 16, marginTop: 4 },
   half: { flex: 1 },
   full: { flex: 1 },
@@ -354,10 +372,15 @@ const styles = StyleSheet.create({
   errorText: { color: '#dc2626', fontSize: 14 },
   submit: {
     marginTop: 24,
-    paddingVertical: 14,
+    paddingVertical: 15,
     borderRadius: 12,
     backgroundColor: '#0060ac',
     alignItems: 'center',
+    shadowColor: '#0060ac',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
   },
   submitDisabled: { opacity: 0.7 },
   submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
