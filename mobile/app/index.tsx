@@ -68,6 +68,9 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Your watches</Text>
         <View style={styles.headerActions}>
+          <Pressable onPress={() => router.push('/archive')} hitSlop={8}>
+            <Text style={styles.archiveLink}>Archive</Text>
+          </Pressable>
           <Pressable onPress={() => router.push('/watches/new')} hitSlop={8}>
             <Text style={styles.newWatch}>+ New</Text>
           </Pressable>
@@ -183,6 +186,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   signOut: { color: '#94a3b8', fontSize: 13 },
+  archiveLink: { color: '#0060ac', fontSize: 13, fontWeight: '600' },
   empty: { textAlign: 'center', color: '#94a3b8', marginTop: 40 },
   card: {
     backgroundColor: '#fff',

@@ -26,6 +26,9 @@ export default function Nav() {
           <Link href="/dashboard" style={{ fontSize: 14, fontWeight: 500, color: '#bfdbfe', textDecoration: 'none' }}>
             Watches
           </Link>
+          <Link href="/archive" style={{ fontSize: 14, fontWeight: 500, color: '#bfdbfe', textDecoration: 'none' }}>
+            Archive
+          </Link>
           <Link href="/watches/new" style={{ fontSize: 14, fontWeight: 500, background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '6px 12px', borderRadius: 8, textDecoration: 'none' }}>
             + New watch
           </Link>
