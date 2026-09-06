@@ -30,8 +30,27 @@ export type AlertTrigger = {
   type: 'drop_10pct' | 'new_low'
   cashPrice: number | null
   milesPrice: number | null
+  // The single most recent prior check — informational only. NOT what
+  // decided this alert (see baselineCashPrice/baselineMilesPrice below) and
+  // can disagree with it in sign: a price can be down against the week's
+  // average while up against yesterday specifically.
   prevCashPrice: number | null
   prevMilesPrice: number | null
+  // The value actually compared against to fire this alert: the 7-day
+  // rolling average for 'drop_10pct', the previous all-time low for
+  // 'new_low'. Always on the correct side of `cashPrice`/`milesPrice` for
+  // this alert's `type` by construction (that's what made it fire) — unlike
+  // prevCashPrice/prevMilesPrice, which is a different, unrelated value that
+  // once produced a real "📉 Price dropped -5%" email for a price that had
+  // actually risen 5% versus the day before, because the alert had fired
+  // against a much higher 7-day average instead. Use these for any
+  // "dropped by X%" or "was $Y" language, never prevCashPrice/prevMilesPrice.
+  baselineCashPrice: number | null
+  baselineMilesPrice: number | null
+  // Which metric(s) actually crossed this alert's threshold — so a caller
+  // can report the real reason instead of guessing from whichever of
+  // cash/miles happens to produce a non-empty formatDrop() string.
+  triggeredBy: 'cash' | 'miles' | 'both'
 }
 
 /** Latest must be this far below the 7-day average to count as a drop. */
@@ -109,16 +128,19 @@ export function evaluateAlerts(history: PriceCheck[]): AlertTrigger | null {
     low !== null &&
     latestPrice < low * (1 - NEW_LOW_MARGIN)
 
-  if (
-    beatsLow(latest.cash_price, historicLowCash) ||
-    beatsLow(latest.miles_price, historicLowMiles)
-  ) {
+  const cashBeatsLow = beatsLow(latest.cash_price, historicLowCash)
+  const milesBeatsLow = beatsLow(latest.miles_price, historicLowMiles)
+
+  if (cashBeatsLow || milesBeatsLow) {
     return {
       type: 'new_low',
       cashPrice: latest.cash_price,
       milesPrice: latest.miles_price,
       prevCashPrice: prevCash,
       prevMilesPrice: prevMiles,
+      baselineCashPrice: historicLowCash,
+      baselineMilesPrice: historicLowMiles,
+      triggeredBy: cashBeatsLow && milesBeatsLow ? 'both' : cashBeatsLow ? 'cash' : 'miles',
     }
   }
 
@@ -140,15 +162,28 @@ export function evaluateAlerts(history: PriceCheck[]): AlertTrigger | null {
       milesPrice: latest.miles_price,
       prevCashPrice: prevCash,
       prevMilesPrice: prevMiles,
+      baselineCashPrice: avgCash,
+      baselineMilesPrice: avgMiles,
+      triggeredBy: cashDropped && milesDropped ? 'both' : cashDropped ? 'cash' : 'miles',
     }
   }
 
   return null
 }
 
-/** Human-readable drop % string */
-export function formatDrop(current: number | null, prev: number | null): string {
-  if (current === null || prev === null || prev === 0) return ''
-  const pct = ((prev - current) / prev) * 100
+/**
+ * Human-readable drop % string, e.g. "12%".
+ *
+ * Callers MUST pass a `baseline` the caller knows is higher than `current`
+ * (an AlertTrigger's baselineCashPrice/baselineMilesPrice, never
+ * prevCashPrice/prevMilesPrice — see AlertTrigger's own comment for why).
+ * Passing the wrong baseline can silently produce a negative percentage,
+ * which reads as nonsense next to the word "dropped": this function once
+ * received prevCashPrice for a price that had *risen* since the last check,
+ * and rendered as the real, shipped "📉 Price dropped -5%" bug.
+ */
+export function formatDrop(current: number | null, baseline: number | null): string {
+  if (current === null || baseline === null || baseline === 0) return ''
+  const pct = ((baseline - current) / baseline) * 100
   return `${Math.round(pct)}%`
 }

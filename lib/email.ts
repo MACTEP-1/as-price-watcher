@@ -45,8 +45,21 @@ function alertHeadline(trigger: AlertTrigger, watch: AlertEmailWatch): string {
   if (trigger.type === 'new_low') {
     return `🔔 New price low: ${route} on ${watch.depart_date}`
   }
-  const cashDrop = formatDrop(trigger.cashPrice, trigger.prevCashPrice)
-  const milesDrop = formatDrop(trigger.milesPrice, trigger.prevMilesPrice)
+  // Use baselineCashPrice/baselineMilesPrice (the 7-day average that
+  // actually decided this alert), not prevCashPrice/prevMilesPrice (the
+  // single prior check) — the two can disagree in sign. Only report the
+  // metric(s) that actually crossed the threshold, per triggeredBy, rather
+  // than whichever of cash/miles happens to produce a non-empty string.
+  // See AlertTrigger's own comment and formatDrop's for the real bug this
+  // once caused: "📉 Price dropped -5%" for a price that had risen 5%.
+  const cashDrop =
+    trigger.triggeredBy !== 'miles'
+      ? formatDrop(trigger.cashPrice, trigger.baselineCashPrice)
+      : ''
+  const milesDrop =
+    trigger.triggeredBy !== 'cash'
+      ? formatDrop(trigger.milesPrice, trigger.baselineMilesPrice)
+      : ''
   const dropStr = cashDrop || milesDrop
   return `📉 Price dropped ${dropStr}: ${route} on ${watch.depart_date}`
 }
@@ -62,12 +75,20 @@ function buildEmailHtml(params: {
   const watchUrl = `${APP_URL}/watches/${watch.id}`
   const unsubUrl = `${APP_URL}/api/alerts/unsubscribe?watchId=${watch.id}&alertId=${alertId}`
 
+  // "was $X" / "X mi" here means "the value this alert was actually
+  // measured against" (baselineCashPrice/baselineMilesPrice) — not the
+  // single most recent prior check (prevCashPrice/prevMilesPrice), which
+  // can be a completely different number pointing the opposite direction.
+  // Labeled by alert type since the baseline means something different for
+  // each: a 7-day average for a drop, the previous record for a new low.
+  const baselineLabel = trigger.type === 'new_low' ? 'previous low' : '7-day avg'
+
   const cashRow =
     trigger.cashPrice !== null
       ? `<tr>
           <td style="padding:8px 16px;color:#6b7280;">Cash price</td>
           <td style="padding:8px 16px;font-weight:600;color:#111827;">${formatCash(trigger.cashPrice)}</td>
-          <td style="padding:8px 16px;color:#6b7280;">${trigger.prevCashPrice ? `was ${formatCash(trigger.prevCashPrice)}` : ''}</td>
+          <td style="padding:8px 16px;color:#6b7280;">${trigger.baselineCashPrice !== null ? `${baselineLabel} ${formatCash(trigger.baselineCashPrice)}` : ''}</td>
         </tr>`
       : ''
 
@@ -76,7 +97,7 @@ function buildEmailHtml(params: {
       ? `<tr>
           <td style="padding:8px 16px;color:#6b7280;">Miles price</td>
           <td style="padding:8px 16px;font-weight:600;color:#111827;">${formatMiles(trigger.milesPrice)}</td>
-          <td style="padding:8px 16px;color:#6b7280;">${trigger.prevMilesPrice ? `was ${formatMiles(trigger.prevMilesPrice)}` : ''}</td>
+          <td style="padding:8px 16px;color:#6b7280;">${trigger.baselineMilesPrice !== null ? `${baselineLabel} ${formatMiles(trigger.baselineMilesPrice)}` : ''}</td>
         </tr>`
       : ''
 
