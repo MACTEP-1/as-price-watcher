@@ -113,8 +113,21 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     if (params.returnDate) query.set('return_date', params.returnDate)
 
     // Keep the request inside the cron's 30s budget.
+    //
+    // This was 20s, which did NOT achieve that: cron-job.org's timeout is a
+    // hard 30s (their maximum — not raisable on this account), and the cron
+    // route spends that budget on a cold start, several Supabase round trips
+    // and, on an alert day, a Resend send. A single 20s fetch left no room,
+    // and with the itinerary loop then running sequentially, two routes could
+    // reach 40s on their own. That combination produced a real "Failed
+    // (timeout)" on 2026-09-08 whose timing breakdown showed ~0s for DNS/
+    // connect/TLS and the full 30s waiting on the response body.
+    //
+    // Measured latency against the live API is ~2s per search, so 8s is still
+    // 4x headroom. Exceeding it now costs one null data point for one route on
+    // one cycle — the run continues — instead of taking the whole check down.
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 20_000)
+    const timer = setTimeout(() => controller.abort(), 8_000)
 
     let data: any
     try {
