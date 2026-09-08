@@ -16,6 +16,7 @@ import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice } from '@/lib/miles'
 import { evaluateAlerts } from '@/lib/alerts'
 import { sendAlertEmail } from '@/lib/email'
+import { mapWithConcurrency } from '@/lib/concurrency'
 import type { PriceCheck, Itinerary } from '@/types'
 
 export const runtime = 'nodejs'
@@ -34,6 +35,9 @@ function oneItinerary(v: Itinerary | Itinerary[] | null): Itinerary | null {
   if (!v) return null
   return Array.isArray(v) ? (v[0] ?? null) : v
 }
+
+/** One `byItinerary` map entry: [itineraryId, { itinerary, watchers }]. */
+type ItineraryEntry = [string, { itinerary: Itinerary; watchers: ActiveWatchRow[] }]
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -77,7 +81,12 @@ export async function GET(req: NextRequest) {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
 
-  for (const [itineraryId, { itinerary, watchers }] of byItinerary) {
+  // One itinerary's full cycle: expire-check, fetch, store, evaluate, deliver.
+  // Returns its own result row rather than pushing to a shared array, so the
+  // ordering stays deterministic once these run concurrently (see below).
+  async function processItinerary([itineraryId, { itinerary, watchers }]: ItineraryEntry): Promise<
+    Record<string, unknown>
+  > {
     try {
       // ── Expire ──────────────────────────────────────────────────────
       if (new Date(itinerary.depart_date) < new Date()) {
@@ -86,8 +95,7 @@ export async function GET(req: NextRequest) {
           .update({ status: 'expired' })
           .eq('itinerary_id', itineraryId)
           .eq('status', 'active')
-        results.push({ itineraryId, status: 'expired', watchers: watchers.length })
-        continue
+        return { itineraryId, status: 'expired', watchers: watchers.length }
       }
 
       // ── Fetch ───────────────────────────────────────────────────────
@@ -131,8 +139,7 @@ export async function GET(req: NextRequest) {
 
       if (insertError) {
         console.error(`[cron] Insert error for itinerary ${itineraryId}:`, insertError)
-        results.push({ itineraryId, status: 'error', error: insertError.message })
-        continue
+        return { itineraryId, status: 'error', error: insertError.message }
       }
 
       // ── Evaluate — once per itinerary, not once per watcher ─────────
@@ -149,12 +156,11 @@ export async function GET(req: NextRequest) {
           : null
 
       if (!trigger) {
-        results.push({
+        return {
           itineraryId,
           status: 'stored, no alert',
           watchers: watchers.length,
-        })
-        continue
+        }
       }
 
       // ── Deliver — once per watcher, each throttled separately ───────
@@ -218,18 +224,50 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      results.push({
+      return {
         itineraryId,
         status: 'alert fired',
         type: trigger.type,
         sent,
         throttled,
-      })
+      }
     } catch (err) {
       console.error(`[cron] Unexpected error for itinerary ${itineraryId}:`, err)
-      results.push({ itineraryId, status: 'error', error: String(err) })
+      return { itineraryId, status: 'error', error: String(err) }
     }
   }
+
+  // Run itineraries CONCURRENTLY rather than one after another.
+  //
+  // Sequentially, wall-clock was the sum of every route's upstream latency,
+  // and cron-job.org's 30s timeout is a hard ceiling that cannot be raised on
+  // this account — so each route added brought the run closer to a guaranteed
+  // failure, and two were already enough to hit it (2026-09-08). Concurrently,
+  // wall-clock is the slowest single route instead.
+  //
+  // Capped rather than unbounded: each itinerary fires a SerpApi search, and
+  // that quota (250/month free) and its rate limits are real. 5 is well above
+  // the current route count and well below anything upstream would object to.
+  // Override with CRON_CONCURRENCY if a run ever needs throttling further.
+  const concurrency = Math.max(
+    1,
+    parseInt(process.env.CRON_CONCURRENCY ?? '5', 10) || 5
+  )
+
+  // Each itinerary already try/catches its own body, so a rejection here would
+  // mean a bug in the catch itself. Handled anyway — one broken route must
+  // never discard the results of the routes that succeeded.
+  const settled = await mapWithConcurrency(
+    Array.from(byItinerary.entries()),
+    concurrency,
+    processItinerary,
+    (error, [itineraryId]) => {
+      console.error(`[cron] Worker rejected for itinerary ${itineraryId}:`, error)
+      return { itineraryId, status: 'error', error: String(error) }
+    }
+  )
+
+  results.push(...settled)
 
   return NextResponse.json({
     watches: watches.length,
