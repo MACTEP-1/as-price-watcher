@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getWatchesWithPrices } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import ArchiveCard from '@/components/ArchiveCard'
+import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
 export const revalidate = 0
 
@@ -43,11 +44,16 @@ export default async function ArchivePage() {
             </p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
-            {watches.map((w) => (
-              <ArchiveCard key={w.id} watch={w} />
-            ))}
-          </div>
+          <>
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
+              {watches.map((w) => (
+                <ArchiveCard key={w.id} watch={w} />
+              ))}
+            </div>
+            {/* Archived watches still display their last-known miles figure,
+                so the attribution requirement applies here too. */}
+            <SeatsAeroCredit style={{ marginTop: 20 }} />
+          </>
         )}
       </main>
     </>

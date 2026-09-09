@@ -6,6 +6,7 @@ import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
 import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor } from '@/lib/utils'
+import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
 export const revalidate = 0
 
@@ -140,6 +141,11 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
             ) : (
               <p style={{ margin: 0, fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>Miles history not yet available</p>
             )}
+            {/* Sits directly under the miles figures rather than at the page
+                foot, so it reads as sourcing for that data specifically —
+                which is what seats.aero's "at the point which the data is
+                displayed" wording asks for. */}
+            <SeatsAeroCredit style={{ marginTop: 16 }} />
           </div>
         )}
 

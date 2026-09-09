@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getWatchesWithPrices } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import WatchCard from '@/components/WatchCard'
+import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
 export const revalidate = 0
 
@@ -44,11 +45,17 @@ export default async function DashboardPage() {
             </Link>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
-            {watches.map((w) => (
-              <WatchCard key={w.id} watch={w} />
-            ))}
-          </div>
+          <>
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
+              {watches.map((w) => (
+                <WatchCard key={w.id} watch={w} />
+              ))}
+            </div>
+            {/* Required by seats.aero's terms wherever miles data renders —
+                see components/SeatsAeroCredit.tsx. Inside this branch only:
+                the empty state above shows no award data to attribute. */}
+            <SeatsAeroCredit style={{ marginTop: 20 }} />
+          </>
         )}
       </main>
     </>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { SearchResult } from './api/search/route'
 import { SEARCH_MAX_DAYS } from '@/lib/config'
+import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
 const POPULAR = [
   { o: 'SEA', d: 'LAX' }, { o: 'SEA', d: 'SFO' }, { o: 'SEA', d: 'JFK' },
@@ -508,6 +509,11 @@ export default function Home() {
               )
             })}
           </div>
+          {/* This is the surface seats.aero's terms name most directly —
+              "at the point which the data is SEARCHED and displayed" — so
+              the credit belongs with the results, not just on the
+              signed-in pages. See components/SeatsAeroCredit.tsx. */}
+          <SeatsAeroCredit style={{ marginTop: 16 }} />
         </div>
       )}
 
