@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase'
 // design (see its own header comment), so it works from any client that
 // hands it a Supabase client and a user id.
 import { getWatchesWithPrices } from '../../lib/watches'
+import SeatsAeroCredit from '../components/SeatsAeroCredit'
 import type { WatchWithLatestPrice } from '../../types'
 // Pure formatting helpers, split out of lib/utils.ts specifically so mobile
 // can share them without pulling in clsx/tailwind-merge (see lib/format.ts's
@@ -90,6 +91,12 @@ export default function DashboardScreen() {
         ListEmptyComponent={
           <Text style={styles.empty}>No active watches yet.</Text>
         }
+        // Required by seats.aero's terms wherever miles data renders — see
+        // mobile/components/SeatsAeroCredit.tsx. As a list footer it sits
+        // directly below the cards showing those figures. Suppressed when
+        // the list is empty, since ListFooterComponent renders regardless
+        // and an empty list displays no award data to attribute.
+        ListFooterComponent={watches.length > 0 ? <SeatsAeroCredit /> : null}
         renderItem={({ item }) => {
           const cashChange = pctChange(item.latest_cash, item.prev_cash)
           const milesChange = pctChange(item.latest_miles, item.prev_miles)

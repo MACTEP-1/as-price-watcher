@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { getWatchesWithPrices } from '../../lib/watches'
 import type { WatchWithLatestPrice } from '../../types'
 import { formatCash, formatMiles, formatDate } from '../../lib/format'
+import SeatsAeroCredit from '../components/SeatsAeroCredit'
 
 /**
  * Mirrors app/archive/page.tsx on the web: same statuses, same muted
@@ -102,6 +103,10 @@ export default function ArchiveScreen() {
             unsubscribed will show up here.
           </Text>
         }
+        // Archived cards still show their last-known miles figure, so the
+        // attribution requirement applies here too. Same empty-list
+        // suppression as the dashboard.
+        ListFooterComponent={watches.length > 0 ? <SeatsAeroCredit /> : null}
         renderItem={({ item }) => (
           <Pressable
             style={styles.card}

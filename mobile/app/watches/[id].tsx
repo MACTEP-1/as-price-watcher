@@ -12,6 +12,7 @@ import {
   formatPctChange,
   changeColor,
 } from '../../../lib/format'
+import SeatsAeroCredit from '../../components/SeatsAeroCredit'
 
 export default function WatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -122,6 +123,11 @@ export default function WatchDetailScreen() {
           </View>
         </View>
       </View>
+
+      {/* Directly under the cash/miles card rather than at the bottom of the
+          scroll, so it reads as sourcing for the miles figure above it —
+          seats.aero's "at the point which the data is displayed". */}
+      <SeatsAeroCredit />
 
       <Text style={styles.sectionTitle}>
         Price history ({checks.length} check{checks.length !== 1 ? 's' : ''})
