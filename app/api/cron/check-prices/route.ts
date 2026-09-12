@@ -15,7 +15,7 @@ import { createSupabaseServiceClient } from '@/lib/supabase/server'
 import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice } from '@/lib/miles'
 import { evaluateAlerts } from '@/lib/alerts'
-import { sendAlertEmail } from '@/lib/email'
+import { sendAlertEmail, sendCronFailureEmail } from '@/lib/email'
 import { mapWithConcurrency } from '@/lib/concurrency'
 import type { PriceCheck, Itinerary } from '@/types'
 
@@ -42,9 +42,32 @@ type ItineraryEntry = [string, { itinerary: Itinerary; watchers: ActiveWatchRow[
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    // Deliberately NO failure email on this path. The endpoint is public, so
+    // reporting auth failures by email would let anyone who knows the URL
+    // flood the inbox and burn the Resend quota. Report failures of the RUN,
+    // never of the auth — see sendCronFailureEmail's security note.
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Everything past the auth gate is wrapped so that an unexpected throw is
+  // reported rather than becoming an anonymous 500. Before this existed, the
+  // 2026-09-12 failure left no recoverable trace at all: cron-job.org says
+  // only "500", and Vercel Hobby had already discarded the logs by the time
+  // anyone looked.
+  try {
+    return await runPriceCheck()
+  } catch (err) {
+    console.error('[cron] Unhandled failure:', err)
+    await sendCronFailureEmail({
+      stage: 'unhandled',
+      message: err instanceof Error ? err.message : String(err),
+      detail: err instanceof Error ? err.stack : undefined,
+    })
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+async function runPriceCheck(): Promise<NextResponse> {
   const supabase = createSupabaseServiceClient()
   const results: Record<string, unknown>[] = []
 
@@ -56,6 +79,14 @@ export async function GET(req: NextRequest) {
 
   if (watchError) {
     console.error('[cron] Failed to fetch watches:', watchError)
+    // The only deliberate 500 in this route, and the prime suspect for the
+    // 2026-09-12 failure. Resend is used rather than anything touching the
+    // database, precisely because the database is what just failed.
+    await sendCronFailureEmail({
+      stage: 'watches-query',
+      message: watchError.message ?? 'Supabase returned an error',
+      detail: JSON.stringify(watchError, null, 2),
+    })
     return NextResponse.json({ error: watchError.message }, { status: 500 })
   }
 
@@ -268,6 +299,20 @@ export async function GET(req: NextRequest) {
   )
 
   results.push(...settled)
+
+  // Partial failures are the insidious case: a single itinerary can fail
+  // every single day while the run still returns 200, cron-job.org reports
+  // success, and nobody ever reads the response body. Without this they are
+  // completely silent. Reported, but still a 200 — the run genuinely did
+  // its job for the other routes, and claiming total failure would be wrong.
+  const failed = settled.filter((r) => r.status === 'error')
+  if (failed.length > 0) {
+    await sendCronFailureEmail({
+      stage: `partial (${failed.length}/${settled.length} itineraries)`,
+      message: `${failed.length} of ${settled.length} itineraries failed to check. The run itself completed.`,
+      detail: JSON.stringify(failed, null, 2),
+    })
+  }
 
   return NextResponse.json({
     watches: watches.length,

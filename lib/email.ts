@@ -161,6 +161,102 @@ function buildEmailHtml(params: {
 </html>`
 }
 
+/**
+ * Operational failure report for the price-check cron.
+ *
+ * ── Why this exists ───────────────────────────────────────────────────────
+ * Vercel's Hobby plan keeps runtime logs for ONE HOUR. The cron runs once a
+ * day at 13:00 UTC. A failure is therefore always discovered hours later,
+ * with the logs long gone — which is exactly what happened on 2026-09-08
+ * (timeout) and again on 2026-09-12 (a 500 that stayed permanently
+ * undiagnosed). cron-job.org only ever says *that* a run failed, never why.
+ *
+ * So the run reports its own cause of death, at the moment it dies.
+ *
+ * ── Design constraints, each load-bearing ─────────────────────────────────
+ *   1. Depends on NOTHING but Resend. The most likely failure source is
+ *      Supabase, so anything routed through the database would be silent in
+ *      precisely the case this exists for.
+ *   2. NEVER throws. A broken error-reporter must not replace the original
+ *      error with its own — that turns one diagnosable failure into two
+ *      mysteries. Every path returns a boolean.
+ *   3. No-op when CRON_ALERT_EMAIL is unset, rather than guessing a
+ *      recipient. Guessing means either silently mailing the wrong person or
+ *      a database lookup, and (1) rules the lookup out.
+ *
+ * ── Security ──────────────────────────────────────────────────────────────
+ * Callers MUST NOT invoke this before the CRON_SECRET check passes. An
+ * endpoint that emails on unauthenticated failure is an email-bomb vector:
+ * anyone hitting the URL with a wrong secret could fill an inbox and burn
+ * the Resend quota. Report failures of the RUN, never of the auth.
+ */
+export async function sendCronFailureEmail(params: {
+  /** Where it broke, e.g. 'watches-query' — becomes the subject. */
+  stage: string
+  /** One-line summary. */
+  message: string
+  /** Optional detail: stack, PostgREST error body, per-itinerary rows. */
+  detail?: string
+}): Promise<boolean> {
+  const to = process.env.CRON_ALERT_EMAIL
+  if (!to) {
+    console.warn(
+      '[cron] CRON_ALERT_EMAIL is not set — failure report not sent. ' +
+        `Stage: ${params.stage}. Message: ${params.message}`
+    )
+    return false
+  }
+
+  try {
+    const when = new Date().toISOString()
+
+    // Detail can be an arbitrarily large upstream error body; cap it so a
+    // pathological payload can't blow up the send.
+    const detail = params.detail ? params.detail.slice(0, 4000) : ''
+
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: `⚠️ Price-check cron failed: ${params.stage}`,
+      html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:24px;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;">
+  <h1 style="margin:0 0 4px;font-size:18px;">Price-check cron failed</h1>
+  <p style="margin:0 0 16px;font-size:13px;color:#6b7280;">${esc(when)}</p>
+  <table cellpadding="0" cellspacing="0" style="font-size:14px;margin-bottom:16px;">
+    <tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Stage</td><td style="font-weight:600;">${esc(params.stage)}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Message</td><td style="font-weight:600;">${esc(params.message)}</td></tr>
+  </table>
+  ${
+    detail
+      ? `<pre style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;">${esc(detail)}</pre>`
+      : ''
+  }
+  <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">
+    Sent because the run failed. Vercel Hobby keeps runtime logs for only one
+    hour, so this message may be the only surviving record.
+  </p>
+</body>
+</html>`,
+    })
+
+    if (error) {
+      console.error('[cron] Failure report could not be sent:', error)
+      return false
+    }
+    return true
+  } catch (err) {
+    // Swallowed deliberately — see constraint 2 above.
+    console.error('[cron] Failure report threw:', err)
+    return false
+  }
+}
+
 export async function sendAlertEmail(params: {
   to: string
   watch: AlertEmailWatch
