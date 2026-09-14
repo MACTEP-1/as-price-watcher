@@ -112,6 +112,26 @@ async function runPriceCheck(): Promise<NextResponse> {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
 
+  // ── When a watch is considered departed ─────────────────────────────
+  //
+  // depart_date is a DATE-ONLY string, so `new Date(depart_date)` resolves
+  // to UTC midnight — which is 5pm the PREVIOUS day in US Pacific. The old
+  // check therefore retired a watch for a Monday flight on Sunday evening,
+  // while the user could still be actively watching it. East of UTC the
+  // error runs the other way.
+  //
+  // Compare date strings in UTC instead (ISO 'YYYY-MM-DD' sorts
+  // chronologically, so a plain < is correct), and only once the departure
+  // date is a full day behind — that keeps the watch alive for the whole
+  // departure day in every timezone on earth (max real offset is ±14h).
+  //
+  // The cost is at most one extra SerpApi search per route, once, plus the
+  // watch lingering on the dashboard up to a day longer. Cheap next to a
+  // watch vanishing before its flight has left.
+  const departedBefore = new Date()
+  departedBefore.setUTCDate(departedBefore.getUTCDate() - 1)
+  const departedBeforeDate = departedBefore.toISOString().slice(0, 10)
+
   // ── Skip itineraries already checked recently ────────────────────────
   //
   // This is what makes the route safely RE-RUNNABLE, which in turn is what
@@ -167,7 +187,7 @@ async function runPriceCheck(): Promise<NextResponse> {
   > {
     try {
       // ── Expire ──────────────────────────────────────────────────────
-      if (new Date(itinerary.depart_date) < new Date()) {
+      if (itinerary.depart_date < departedBeforeDate) {
         await supabase
           .from('watches')
           .update({ status: 'expired' })
