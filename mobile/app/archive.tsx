@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     // See mobile/app/index.tsx's card style for why this is boxShadow, not
     // shadow*/elevation.
-    boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+    boxShadow: '0 4px 12px rgba(15,23,42,0.18)',
   },
   cardBody: { padding: 18 },
   routeRow: {

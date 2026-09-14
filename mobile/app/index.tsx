@@ -218,8 +218,8 @@ const styles = StyleSheet.create({
     // boxShadow requires; the old shadow* props are deprecated on web
     // (confirmed via a real console warning) and were only ever an iOS-only
     // approximation anyway. Same literal string as the web card's inline
-    // `boxShadow: '0 1px 4px rgba(0,0,0,0.08)'`, not a translation of it.
-    boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+    // `boxShadow: '0 4px 12px rgba(15,23,42,0.18)'`, not a translation of it.
+    boxShadow: '0 4px 12px rgba(15,23,42,0.18)',
   },
   cardBody: { padding: 18 },
   routeRow: {
