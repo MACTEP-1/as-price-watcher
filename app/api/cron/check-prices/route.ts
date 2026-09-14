@@ -112,6 +112,53 @@ async function runPriceCheck(): Promise<NextResponse> {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
 
+  // ── Skip itineraries already checked recently ────────────────────────
+  //
+  // This is what makes the route safely RE-RUNNABLE, which in turn is what
+  // makes a second scheduled run viable as a safety net. Supabase returned a
+  // gateway timeout on the 13:00 UTC run on both 2026-09-12 and 2026-09-13,
+  // losing the day's check each time; the same query succeeded an hour later.
+  // A second run shortly after the first turns that from a lost day into a
+  // brief delay — but only if a re-run is free when the first one worked.
+  //
+  // Without this guard a second run would re-spend SerpApi quota (250/month
+  // free) and insert a duplicate price_check, distorting the rolling average
+  // the alert logic depends on — exactly what the manual diagnostic runs did
+  // to 2026-09-08.
+  //
+  // A rolling window rather than a calendar day: "same UTC day" would let a
+  // run just after midnight re-check something measured 40 minutes earlier,
+  // and would block a legitimate re-run 23 hours later. 20h leaves margin
+  // under the 24h cadence while absorbing a retry half an hour behind.
+  const minHoursBetweenChecks = Math.max(
+    0,
+    parseFloat(process.env.CRON_MIN_HOURS_BETWEEN_CHECKS ?? '20') || 20
+  )
+
+  const recentlyChecked = new Set<string>()
+  if (minHoursBetweenChecks > 0 && byItinerary.size > 0) {
+    const cutoff = new Date(
+      Date.now() - minHoursBetweenChecks * 60 * 60 * 1000
+    ).toISOString()
+
+    const { data: recentRows, error: recentError } = await supabase
+      .from('price_checks')
+      .select('itinerary_id')
+      .in('itinerary_id', Array.from(byItinerary.keys()))
+      .gte('checked_at', cutoff)
+
+    if (recentError) {
+      // Non-fatal on purpose. Failing to read this only risks a duplicate
+      // check; refusing to run because of it would cost the day's prices.
+      // The cheap failure is the one to prefer.
+      console.error('[cron] Could not read recent checks, not skipping:', recentError)
+    } else {
+      for (const r of (recentRows ?? []) as { itinerary_id: string }[]) {
+        recentlyChecked.add(r.itinerary_id)
+      }
+    }
+  }
+
   // One itinerary's full cycle: expire-check, fetch, store, evaluate, deliver.
   // Returns its own result row rather than pushing to a shared array, so the
   // ordering stays deterministic once these run concurrently (see below).
@@ -127,6 +174,18 @@ async function runPriceCheck(): Promise<NextResponse> {
           .eq('itinerary_id', itineraryId)
           .eq('status', 'active')
         return { itineraryId, status: 'expired', watchers: watchers.length }
+      }
+
+      // ── Skip ────────────────────────────────────────────────────────
+      // Placed AFTER the expire check so a departed itinerary is still
+      // retired even on a re-run, and BEFORE any fetch so a skip costs no
+      // SerpApi quota and writes no duplicate row.
+      if (recentlyChecked.has(itineraryId)) {
+        return {
+          itineraryId,
+          status: 'skipped, checked recently',
+          watchers: watchers.length,
+        }
       }
 
       // ── Fetch ───────────────────────────────────────────────────────
