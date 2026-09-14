@@ -12,6 +12,7 @@
  */
 
 import type {
+  Alert,
   PriceCheck,
   WatchWithLatestPrice,
   Itinerary,
@@ -175,4 +176,28 @@ export async function getWatchDetail(
     },
     checks,
   }
+}
+
+/**
+ * Real, server-evaluated alerts for a watch — the same rows the web detail
+ * page renders as "Alert history". Extracted so mobile can show the same
+ * thing instead of recomputing its own "new low" from raw price history,
+ * which the web page never did and which had none of evaluateAlerts' noise
+ * guards (see lib/alerts.ts's header comment for why those guards exist).
+ * RLS on the alerts table scopes this to the caller's own rows already, but
+ * the watchId filter is kept explicit rather than relied on implicitly.
+ */
+export async function getWatchAlerts(
+  supabase: any,
+  watchId: string,
+  limit = 10
+): Promise<Alert[]> {
+  const { data } = await supabase
+    .from('alerts')
+    .select('*')
+    .eq('watch_id', watchId)
+    .order('triggered_at', { ascending: false })
+    .limit(limit)
+
+  return (data ?? []) as Alert[]
 }

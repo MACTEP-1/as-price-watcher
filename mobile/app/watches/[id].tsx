@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
-import { getWatchDetail } from '../../../lib/watches'
-import type { PriceCheck, WatchWithLatestPrice } from '../../../types'
+import { getWatchDetail, getWatchAlerts } from '../../../lib/watches'
+import type { Alert, PriceCheck, WatchWithLatestPrice } from '../../../types'
 import {
   formatCash,
   formatMiles,
@@ -19,6 +19,7 @@ export default function WatchDetailScreen() {
   const router = useRouter()
   const [watch, setWatch] = useState<WatchWithLatestPrice | null>(null)
   const [checks, setChecks] = useState<PriceCheck[]>([])
+  const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -34,6 +35,11 @@ export default function WatchDetailScreen() {
       if (result) {
         setWatch(result.watch)
         setChecks(result.checks)
+        // Fetched after the watch resolves, not in parallel — id is only
+        // known-valid (RLS-visible to this user) once getWatchDetail returns
+        // it, and this screen renders fine without alerts on the first frame.
+        const alertRows = await getWatchAlerts(supabase, id)
+        if (!cancelled) setAlerts(alertRows)
       }
       setLoading(false)
     })()
@@ -60,19 +66,6 @@ export default function WatchDetailScreen() {
 
   const cashChange = pctChange(watch.latest_cash, watch.prev_cash)
   const milesChange = pctChange(watch.latest_miles, watch.prev_miles)
-
-  // "New low" badge: a check whose cash price is lower than every check
-  // before it. Only meaningful once there's a prior price to beat, so the
-  // very first check never gets one.
-  const chronological = checks.slice()
-  let runningMin = Infinity
-  const newLowIds = new Set<string>()
-  chronological.forEach((c, i) => {
-    if (c.cash_price != null) {
-      if (i > 0 && c.cash_price < runningMin) newLowIds.add(c.id)
-      runningMin = Math.min(runningMin, c.cash_price)
-    }
-  })
 
   return (
     <ScrollView
@@ -146,9 +139,6 @@ export default function WatchDetailScreen() {
                 {new Date(c.checked_at).toLocaleDateString()}
               </Text>
               <View style={styles.rowPriceWrap}>
-                {newLowIds.has(c.id) && (
-                  <Text style={styles.badge}>NEW LOW</Text>
-                )}
                 <Text style={styles.rowCash}>
                   {c.cash_price != null ? `$${c.cash_price}` : '—'}
                 </Text>
@@ -156,6 +146,45 @@ export default function WatchDetailScreen() {
             </View>
           ))}
       </View>
+
+      {/* Real alerts only — mirrors app/watches/[id]/page.tsx on web. This
+          used to be a badge this screen computed itself from raw price
+          history ("lower than every prior check"), which had none of
+          evaluateAlerts' noise guards (lib/alerts.ts: MIN_CHECKS,
+          NEW_LOW_MARGIN) and didn't correspond to whether an alert actually
+          fired. Showing the same alerts table row the email came from keeps
+          there being exactly one definition of "new low" / "price dropped". */}
+      {alerts.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Alert history</Text>
+          <View style={styles.historyCard}>
+            {alerts.map((a, i) => (
+              <View
+                key={a.id}
+                style={[
+                  styles.alertRow,
+                  i === alerts.length - 1 && styles.rowLast,
+                ]}
+              >
+                <Text style={styles.alertIcon}>
+                  {a.alert_type === 'new_low' ? '🏆' : '📉'}
+                </Text>
+                <View style={styles.alertBody}>
+                  <Text style={styles.alertLabel}>
+                    {a.alert_type === 'new_low'
+                      ? 'New all-time low'
+                      : 'Price dropped ≥10%'}
+                  </Text>
+                  <Text style={styles.alertMeta}>
+                    {new Date(a.triggered_at).toLocaleString()} · Cash:{' '}
+                    {formatCash(a.cash_price)} · Miles: {formatMiles(a.miles_price)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
     </ScrollView>
   )
 }
@@ -220,14 +249,17 @@ const styles = StyleSheet.create({
   rowDate: { color: '#64748b', fontSize: 13 },
   rowPriceWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   rowCash: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
-  badge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#16a34a',
-    backgroundColor: '#f0fdf4',
-    borderRadius: 6,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    overflow: 'hidden',
+  alertRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
+  alertIcon: { fontSize: 18 },
+  alertBody: { flex: 1 },
+  alertLabel: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
+  alertMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
 })
