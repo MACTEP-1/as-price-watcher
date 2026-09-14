@@ -25,6 +25,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    // REQUIRED, and not optional despite persistSession below. The
+    // 'expo-sqlite/localStorage/install' import above only *provides*
+    // localStorage; supabase-js will not reach for it on its own. It picks
+    // localStorage automatically only when it detects a browser, which it
+    // does by checking for `document` — absent in React Native. Without
+    // this line it silently falls back to IN-MEMORY storage, so
+    // persistSession:true becomes a no-op and the session dies with the JS
+    // context: a magic-link sign-in on every single app launch. Caught
+    // 2026-09-14 when a simulator reload logged the user straight out.
+    // Expo's own guide passes it explicitly for exactly this reason:
+    // https://docs.expo.dev/guides/using-supabase/
+    storage: localStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
