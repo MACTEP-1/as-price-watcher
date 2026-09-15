@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase'
 // hands it a Supabase client and a user id.
 import { getWatchesWithPrices } from '../../lib/watches'
 import SeatsAeroCredit from '../components/SeatsAeroCredit'
+import PriceSparkline from '../components/PriceSparkline'
 import type { WatchWithLatestPrice } from '../../types'
 // Pure formatting helpers, split out of lib/utils.ts specifically so mobile
 // can share them without pulling in clsx/tailwind-merge (see lib/format.ts's
@@ -143,6 +144,11 @@ export default function DashboardScreen() {
                         {formatPctChange(cashChange)} vs prev
                       </Text>
                     )}
+                    {item.price_history.length > 0 && (
+                      <View style={styles.sparkline}>
+                        <PriceSparkline history={item.price_history} type="cash" />
+                      </View>
+                    )}
                   </View>
                   <View style={styles.col}>
                     <Text style={styles.microLabel}>Miles</Text>
@@ -160,6 +166,11 @@ export default function DashboardScreen() {
                       >
                         {formatPctChange(milesChange)} vs prev
                       </Text>
+                    )}
+                    {item.price_history.length > 0 && (
+                      <View style={styles.sparkline}>
+                        <PriceSparkline history={item.price_history} type="miles" />
+                      </View>
                     )}
                   </View>
                 </View>
@@ -250,6 +261,7 @@ const styles = StyleSheet.create({
   // and, once it is, whenever no saver award space exists for that route).
   priceMuted: { color: '#94a3b8' },
   change: { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  sparkline: { marginTop: 8 },
   footer: {
     paddingVertical: 10,
     paddingHorizontal: 18,
