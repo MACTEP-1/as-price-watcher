@@ -862,3 +862,53 @@ npm run lint       # ESLint check
 - Main branch: `main`
 - `.env.local` is gitignored — never committed
 - `node_modules/` is gitignored
+
+## Working via Claude's device bridge
+
+Claude Code / Cowork sessions can reach this repo through a device bridge —
+a sandboxed Linux VM with this folder mounted, distinct from an actual Mac
+Terminal. It can run `git add`/`git commit` there (the commit lands in the
+real `.git`, since the folder is genuinely shared with the Mac), but it
+cannot delete files (`rm`/`git checkout --`/`unlink` all fail with
+"Operation not permitted") and has no SSH key, so it can never `git push`
+from there — only commit and hand off.
+
+### Stale lock files after a commit through the bridge
+
+Because the VM can't delete files, git's own post-commit cleanup
+(`.git/HEAD.lock`, `.git/index.lock`, `.git/objects/maintenance.lock`,
+`.git/objects/**/tmp_obj_*`) is left behind after almost every commit made
+this way. The next git command then fails with "Unable to create
+'.git/HEAD.lock': File exists" — not a real conflict, just leftover
+litter from a cleanup step that couldn't unlink its own files.
+
+### 2026-09-15 — deleting those files mid-commit corrupted a commit
+
+Cleaning up the stale lock/tmp_obj files right after a commit, then
+immediately committing again, produced a commit whose tree was missing 79
+files (it looked like it had deleted almost the entire repo) — while the
+actual working-tree files were untouched on disk the whole time. Best
+guess: git's automatic background maintenance/repack (the same process
+that creates `objects/maintenance.lock` and `tmp_obj_*` in the first
+place) was likely still running from the prior commit, and deleting its
+in-progress temp files out from under it corrupted the object store the
+very next commit built its tree from.
+
+Caught immediately via `git diff --stat` on the new commit — a "79 files
+changed" surprise is impossible to miss if every commit's stat gets
+checked before moving on. Fixed with `git reset --mixed <last-good-commit>`,
+which restored the correct state cleanly since nothing had actually been
+deleted from disk.
+
+**Rule going forward:**
+1. Don't `find .git -delete` stale lock/tmp_obj files and immediately
+   retry the commit in the same breath — a background gc from the prior
+   commit may still be using them.
+2. Prefer committing with `git -c gc.auto=0 -c maintenance.auto=0 commit
+   ...` to stop background maintenance from spawning during the commit at
+   all, which avoids this race entirely rather than racing it.
+3. **Always run `git diff --stat` (or `git show --stat HEAD`) immediately
+   after any commit made through the bridge**, before trusting it or
+   handing it off to push. A file/deletion count that doesn't match what
+   was actually changed is the tell — check it every time, not just when
+   something looks wrong.
