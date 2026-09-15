@@ -5,7 +5,7 @@ import { getWatchDetail } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel } from '@/lib/utils'
 import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
 export const revalidate = 0
@@ -156,10 +156,10 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {(alerts ?? []).map((a: any) => (
                 <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <span style={{ fontSize: 18 }}>{a.alert_type === 'new_low' ? '🏆' : '📉'}</span>
+                  <span style={{ fontSize: 18 }}>{alertIcon(a.alert_type)}</span>
                   <div>
                     <p style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 500, color: '#1e293b' }}>
-                      {a.alert_type === 'new_low' ? 'New all-time low' : 'Price dropped ≥10%'}
+                      {alertLabel(a.alert_type)}
                     </p>
                     <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
                       {new Date(a.triggered_at).toLocaleString()} · Cash: {formatCash(a.cash_price)} · Miles: {formatMiles(a.miles_price)}

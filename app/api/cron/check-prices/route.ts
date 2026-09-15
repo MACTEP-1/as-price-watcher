@@ -6,9 +6,17 @@
 //
 // ── Grain ────────────────────────────────────────────────────────────────
 // Prices are fetched and stored PER ITINERARY, so N users watching the same
-// trip cost one search rather than N. Alerts are evaluated per itinerary but
-// DELIVERED per watch — everyone subscribed to that itinerary gets their own
-// email, and the 24h throttle is applied per watch.
+// trip cost one search rather than N. Alerts are DELIVERED per watch —
+// everyone subscribed to that itinerary gets their own email — and the 24h
+// throttle is applied per watch.
+//
+// Evaluation (2026-09-15): new_low and drop_10pct only ever depend on the
+// shared itinerary-level price history, so they fire identically for every
+// watcher on an itinerary, same as always. cumulative_drop's anchor (see
+// lib/alerts.ts) is "the price this particular watcher was last actually
+// alerted about" — necessarily per-watch, not per-itinerary — so
+// evaluateAlerts is now called once PER WATCHER, inside the delivery loop,
+// rather than once per itinerary beforehand.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/supabase/server'
@@ -252,7 +260,7 @@ async function runPriceCheck(): Promise<NextResponse> {
         return { itineraryId, status: 'error', error: insertError.message }
       }
 
-      // ── Evaluate — once per itinerary, not once per watcher ─────────
+      // ── Shared history — feeds every watcher's evaluation ───────────
       const { data: history } = await supabase
         .from('price_checks')
         .select('*')
@@ -260,12 +268,7 @@ async function runPriceCheck(): Promise<NextResponse> {
         .order('checked_at', { ascending: true })
         .limit(30)
 
-      const trigger =
-        history && history.length >= 2
-          ? evaluateAlerts(history as PriceCheck[])
-          : null
-
-      if (!trigger) {
+      if (!history || history.length < 2) {
         return {
           itineraryId,
           status: 'stored, no alert',
@@ -273,23 +276,40 @@ async function runPriceCheck(): Promise<NextResponse> {
         }
       }
 
-      // ── Deliver — once per watcher, each throttled separately ───────
+      // ── Evaluate + deliver — once per watcher ───────────────────────
       let sent = 0
       let throttled = 0
+      let fired = 0
+      let firedType: string | null = null
 
       for (const watcher of watchers) {
-        const { data: recentAlert } = await supabase
+        // One row answers two questions that are really the same fact —
+        // "what did we last tell this person, and when" — so one query
+        // covers both the 24h throttle AND the cumulative_drop anchor
+        // (lib/alerts.ts) rather than running two.
+        const { data: lastAlert } = await supabase
           .from('alerts')
-          .select('id')
+          .select('triggered_at, cash_price, miles_price')
           .eq('watch_id', watcher.id)
-          .gte('triggered_at', yesterday.toISOString())
+          .order('triggered_at', { ascending: false })
           .limit(1)
           .maybeSingle()
 
-        if (recentAlert) {
+        if (lastAlert && new Date(lastAlert.triggered_at) >= yesterday) {
           throttled++
           continue
         }
+
+        const trigger = evaluateAlerts(
+          history as PriceCheck[],
+          lastAlert
+            ? { cashPrice: lastAlert.cash_price, milesPrice: lastAlert.miles_price }
+            : null
+        )
+
+        if (!trigger) continue
+        fired++
+        firedType = trigger.type
 
         const { data: alertRecord } = await supabase
           .from('alerts')
@@ -336,8 +356,8 @@ async function runPriceCheck(): Promise<NextResponse> {
 
       return {
         itineraryId,
-        status: 'alert fired',
-        type: trigger.type,
+        status: fired > 0 ? 'alert fired' : 'stored, no alert',
+        type: firedType,
         sent,
         throttled,
       }

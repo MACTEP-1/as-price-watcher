@@ -15,4 +15,6 @@ export {
   pctChange,
   formatPctChange,
   changeColor,
+  alertIcon,
+  alertLabel,
 } from './format'

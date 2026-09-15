@@ -56,3 +56,29 @@ export function changeColor(pct: number | null): string {
   if (pct === null || Math.round(pct) === 0) return '#94a3b8'
   return pct < 0 ? '#16a34a' : '#ef4444'
 }
+
+/**
+ * Icon and label for an alert history row — shared so web and mobile can't
+ * silently drift out of sync on copy (the type union has three members as
+ * of 2026-09-15, not two; a bare ternary here was the original mobile bug
+ * this whole feature grew out of fixing).
+ */
+export function alertIcon(type: 'drop_10pct' | 'new_low' | 'cumulative_drop'): string {
+  if (type === 'new_low') return '🏆'
+  return '📉'
+}
+
+export function alertLabel(type: 'drop_10pct' | 'new_low' | 'cumulative_drop'): string {
+  switch (type) {
+    case 'new_low':
+      return 'New all-time low'
+    case 'cumulative_drop':
+      // Distinct from drop_10pct's copy on purpose — this fired because of
+      // a slow bleed the 7-day-average check structurally can't see (see
+      // lib/alerts.ts), against the price the user was last actually told
+      // about rather than a rolling average.
+      return 'Price down ≥10% since last alert'
+    case 'drop_10pct':
+      return 'Price dropped ≥10%'
+  }
+}

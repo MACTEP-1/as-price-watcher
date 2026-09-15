@@ -56,7 +56,7 @@ export interface Alert {
   watch_id: string
   user_id: string
   triggered_at: string
-  alert_type: 'drop_10pct' | 'new_low'
+  alert_type: 'drop_10pct' | 'new_low' | 'cumulative_drop'
   cash_price: number | null
   miles_price: number | null
   prev_cash_price: number | null

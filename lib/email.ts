@@ -45,13 +45,15 @@ function alertHeadline(trigger: AlertTrigger, watch: AlertEmailWatch): string {
   if (trigger.type === 'new_low') {
     return `🔔 New price low: ${route} on ${watch.depart_date}`
   }
-  // Use baselineCashPrice/baselineMilesPrice (the 7-day average that
-  // actually decided this alert), not prevCashPrice/prevMilesPrice (the
-  // single prior check) — the two can disagree in sign. Only report the
-  // metric(s) that actually crossed the threshold, per triggeredBy, rather
-  // than whichever of cash/miles happens to produce a non-empty string.
-  // See AlertTrigger's own comment and formatDrop's for the real bug this
-  // once caused: "📉 Price dropped -5%" for a price that had risen 5%.
+  // Use baselineCashPrice/baselineMilesPrice (the value that actually
+  // decided this alert — a 7-day average for drop_10pct, the last-reported
+  // or watch-start price for cumulative_drop), not prevCashPrice/
+  // prevMilesPrice (the single prior check) — the two can disagree in sign.
+  // Only report the metric(s) that actually crossed the threshold, per
+  // triggeredBy, rather than whichever of cash/miles happens to produce a
+  // non-empty string. See AlertTrigger's own comment and formatDrop's for
+  // the real bug this once caused: "📉 Price dropped -5%" for a price that
+  // had risen 5%.
   const cashDrop =
     trigger.triggeredBy !== 'miles'
       ? formatDrop(trigger.cashPrice, trigger.baselineCashPrice)
@@ -61,6 +63,14 @@ function alertHeadline(trigger: AlertTrigger, watch: AlertEmailWatch): string {
       ? formatDrop(trigger.milesPrice, trigger.baselineMilesPrice)
       : ''
   const dropStr = cashDrop || milesDrop
+  if (trigger.type === 'cumulative_drop') {
+    // Distinct copy on purpose: this fires on a slow bleed drop_10pct's
+    // 7-day average is structurally unable to catch (see lib/alerts.ts's
+    // header) — telling the user "since we last told you" rather than
+    // "≥10%" ties the number to something they actually remember, which is
+    // the entire point of anchoring to the last-reported price.
+    return `📉 Price down ${dropStr} since we last told you: ${route} on ${watch.depart_date}`
+  }
   return `📉 Price dropped ${dropStr}: ${route} on ${watch.depart_date}`
 }
 
@@ -80,8 +90,17 @@ function buildEmailHtml(params: {
   // single most recent prior check (prevCashPrice/prevMilesPrice), which
   // can be a completely different number pointing the opposite direction.
   // Labeled by alert type since the baseline means something different for
-  // each: a 7-day average for a drop, the previous record for a new low.
-  const baselineLabel = trigger.type === 'new_low' ? 'previous low' : '7-day avg'
+  // each: a 7-day average for a drop, the previous record for a new low, and
+  // for cumulative_drop either the price from the last alert that actually
+  // fired, or — if none ever has — the first price recorded for this watch.
+  const baselineLabel =
+    trigger.type === 'new_low'
+      ? 'previous low'
+      : trigger.type === 'cumulative_drop'
+        ? trigger.anchorSource === 'last_alert'
+          ? 'last alert'
+          : 'when you started watching'
+        : '7-day avg'
 
   const cashRow =
     trigger.cashPrice !== null

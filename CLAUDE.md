@@ -595,12 +595,22 @@ per run, however many people watch it. Cost tracks **distinct itineraries**,
 which is strongly sub-linear — new users mostly want routes someone already
 tracks.
 
-### Alert grain: evaluate per itinerary, deliver per watch
+### Alert grain: mostly per itinerary, but the cumulative-drop anchor is per watch
 
-There is one price series per itinerary, so `evaluateAlerts()` runs once.
-Delivery then fans out: every active watch on that itinerary gets its own
-email, and the **24h throttle is applied per watch**. Two different grains in
-one loop — deliberate, and the thing to keep straight when editing the cron.
+There is one price series per itinerary, and `new_low`/`drop_10pct` only ever
+depend on that shared series — so those two fire identically for every watch
+on the itinerary, same as always.
+
+`cumulative_drop` (added 2026-09-15, see `lib/alerts.ts`'s header) is
+different: its baseline is "the price THIS watcher was last actually
+alerted about", which is inherently per-watch, not per-itinerary — two
+people watching the same route can be at different points in their own
+alert history. So `evaluateAlerts()` now runs once **per watcher**, inside
+the delivery loop, not once per itinerary beforehand. Delivery still fans
+out per watch and the **24h throttle is still applied per watch** — that
+part is unchanged. Worth remembering when editing the cron: `history` (the
+price series) is shared across the loop, but the `lastReported` argument to
+`evaluateAlerts()` is not.
 
 ### `status` replaces `active`
 

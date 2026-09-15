@@ -11,6 +11,8 @@ import {
   pctChange,
   formatPctChange,
   changeColor,
+  alertIcon,
+  alertLabel,
 } from '../../../lib/format'
 import SeatsAeroCredit from '../../components/SeatsAeroCredit'
 
@@ -166,15 +168,9 @@ export default function WatchDetailScreen() {
                   i === alerts.length - 1 && styles.rowLast,
                 ]}
               >
-                <Text style={styles.alertIcon}>
-                  {a.alert_type === 'new_low' ? '🏆' : '📉'}
-                </Text>
+                <Text style={styles.alertIcon}>{alertIcon(a.alert_type)}</Text>
                 <View style={styles.alertBody}>
-                  <Text style={styles.alertLabel}>
-                    {a.alert_type === 'new_low'
-                      ? 'New all-time low'
-                      : 'Price dropped ≥10%'}
-                  </Text>
+                  <Text style={styles.alertLabel}>{alertLabel(a.alert_type)}</Text>
                   <Text style={styles.alertMeta}>
                     {new Date(a.triggered_at).toLocaleString()} · Cash:{' '}
                     {formatCash(a.cash_price)} · Miles: {formatMiles(a.miles_price)}

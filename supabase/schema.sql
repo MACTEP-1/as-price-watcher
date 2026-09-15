@@ -129,7 +129,7 @@ create table if not exists alerts (
   watch_id         uuid not null references watches(id) on delete cascade,
   user_id          uuid not null references auth.users(id) on delete cascade,
   triggered_at     timestamptz not null default now(),
-  alert_type       text not null check (alert_type in ('drop_10pct','new_low')),
+  alert_type       text not null check (alert_type in ('drop_10pct','new_low','cumulative_drop')),
   cash_price       numeric(10,2),
   miles_price      integer,
   prev_cash_price  numeric(10,2),
