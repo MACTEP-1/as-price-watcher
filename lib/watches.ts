@@ -28,6 +28,7 @@ interface WatchRow {
   user_id: string
   status: WatchStatus
   created_at: string
+  status_changed_at: string
   itinerary_id: string
   // PostgREST types a nested to-one relation as an array even though it
   // returns a single object. Normalise rather than trust either shape.
@@ -56,7 +57,7 @@ export async function getWatchesWithPrices(
   const { data: watchRows, error: watchError } = await supabase
     .from('watches')
     .select(
-      'id, user_id, status, created_at, itinerary_id, itineraries(*)'
+      'id, user_id, status, created_at, status_changed_at, itinerary_id, itineraries(*)'
     )
     .eq('user_id', userId)
     .in('status', statuses)
@@ -102,6 +103,7 @@ export async function getWatchesWithPrices(
         user_id: w.user_id,
         status: w.status,
         created_at: w.created_at,
+        status_changed_at: w.status_changed_at,
 
         itinerary_id: w.itinerary_id,
         origin: itin.origin,
@@ -132,7 +134,7 @@ export async function getWatchDetail(
 ): Promise<{ watch: WatchWithLatestPrice; checks: PriceCheck[] } | null> {
   const { data: row } = await supabase
     .from('watches')
-    .select('id, user_id, status, created_at, itinerary_id, itineraries(*)')
+    .select('id, user_id, status, created_at, status_changed_at, itinerary_id, itineraries(*)')
     .eq('id', watchId)
     .eq('user_id', userId)
     .single()
@@ -160,6 +162,7 @@ export async function getWatchDetail(
       user_id: w.user_id,
       status: w.status,
       created_at: w.created_at,
+      status_changed_at: w.status_changed_at,
 
       itinerary_id: w.itinerary_id,
       origin: itin.origin,

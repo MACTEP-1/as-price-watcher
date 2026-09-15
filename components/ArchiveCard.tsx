@@ -1,14 +1,14 @@
 import Link from 'next/link'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, formatShortDate } from '@/lib/utils'
 
 /**
  * Same card shape as WatchCard, deliberately muted (grey route text, no
  * sparklines, no delete button) so an archived watch reads as "history",
- * not as something still being tracked. No status-change timestamp exists
- * on the watches table (see supabase/schema.sql) — only `created_at` and
- * the itinerary's `depart_date` — so the subtext below leans on those
- * instead of inventing a date the schema doesn't have.
+ * not as something still being tracked. `status_changed_at` (see
+ * supabase/migrations/003_watch_status_changed_at.sql) is set by a DB
+ * trigger whenever `status` changes, so the subtext below can finally show
+ * a real date rather than a status-specific guess.
  */
 
 const STATUS_LABEL: Record<string, string> = {
@@ -18,13 +18,14 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 function statusSubtext(watch: WatchWithLatestPrice): string {
+  const changedOn = formatShortDate(watch.status_changed_at)
   switch (watch.status) {
     case 'expired':
-      return `Departed ${formatDate(watch.depart_date)}`
+      return `Departed ${formatDate(watch.depart_date)} · archived ${changedOn}`
     case 'removed':
-      return 'You stopped watching this route'
+      return `You stopped watching this route on ${changedOn}`
     case 'unsubscribed':
-      return 'Alerts turned off from an email link'
+      return `Alerts turned off ${changedOn}`
     default:
       return ''
   }

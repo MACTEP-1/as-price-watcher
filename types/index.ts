@@ -31,6 +31,9 @@ export interface Watch {
   itinerary_id: string
   status: WatchStatus
   created_at: string
+  // Set by a DB trigger whenever `status` changes — see
+  // supabase/migrations/003_watch_status_changed_at.sql.
+  status_changed_at: string
 }
 
 /** A price observation. Belongs to the itinerary, not to any one watcher. */
@@ -74,6 +77,7 @@ export interface WatchWithLatestPrice {
   user_id: string
   status: WatchStatus
   created_at: string
+  status_changed_at: string
 
   itinerary_id: string
   origin: string

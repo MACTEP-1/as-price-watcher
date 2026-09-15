@@ -32,6 +32,19 @@ export function formatDate(dateStr: string): string {
   })
 }
 
+/**
+ * Short date for a full timestamptz (e.g. `status_changed_at`,
+ * `triggered_at`) — NOT for a date-only column like `depart_date`, which
+ * needs formatDate's 'T12:00:00' guard against UTC-midnight rollback.
+ * A timestamp already carries a real time, so no such guard applies.
+ */
+export function formatShortDate(isoTimestamp: string): string {
+  return new Date(isoTimestamp).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 export function pctChange(current: number | null, prev: number | null): number | null {
   if (current === null || prev === null || prev === 0) return null
   return ((current - prev) / prev) * 100

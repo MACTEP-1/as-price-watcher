@@ -11,16 +11,17 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { getWatchesWithPrices } from '../../lib/watches'
 import type { WatchWithLatestPrice } from '../../types'
-import { formatCash, formatMiles, formatDate } from '../../lib/format'
+import { formatCash, formatMiles, formatDate, formatShortDate } from '../../lib/format'
 import SeatsAeroCredit from '../components/SeatsAeroCredit'
 
 /**
  * Mirrors app/archive/page.tsx on the web: same statuses, same muted
  * treatment (grey route text, status badge, no delete action) so a watch
  * that stopped being tracked reads as history rather than something still
- * live. No status-change timestamp exists on the watches table — only
- * created_at and the itinerary's depart_date — so the subtext below leans
- * on those instead of inventing a date the schema doesn't have.
+ * live. `status_changed_at` (see
+ * supabase/migrations/003_watch_status_changed_at.sql) is set by a DB
+ * trigger whenever `status` changes, so the subtext below can show a real
+ * date rather than a status-specific guess.
  */
 
 const STATUS_LABEL: Record<string, string> = {
@@ -30,13 +31,14 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 function statusSubtext(watch: WatchWithLatestPrice): string {
+  const changedOn = formatShortDate(watch.status_changed_at)
   switch (watch.status) {
     case 'expired':
-      return `Departed ${formatDate(watch.depart_date)}`
+      return `Departed ${formatDate(watch.depart_date)} · archived ${changedOn}`
     case 'removed':
-      return 'You stopped watching this route'
+      return `You stopped watching this route on ${changedOn}`
     case 'unsubscribed':
-      return 'Alerts turned off from an email link'
+      return `Alerts turned off ${changedOn}`
     default:
       return ''
   }

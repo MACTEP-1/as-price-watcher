@@ -12,6 +12,7 @@ export {
   formatCash,
   formatMiles,
   formatDate,
+  formatShortDate,
   pctChange,
   formatPctChange,
   changeColor,

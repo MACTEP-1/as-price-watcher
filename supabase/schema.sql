@@ -75,7 +75,10 @@ create table if not exists watches (
   -- once false, could not tell you which.
   status        text not null default 'active'
                   check (status in ('active','expired','removed','unsubscribed')),
-  created_at    timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+  -- Set automatically by a trigger below, not by application code — see
+  -- supabase/migrations/003_watch_status_changed_at.sql for why.
+  status_changed_at timestamptz not null default now()
 );
 
 alter table watches enable row level security;
@@ -85,6 +88,26 @@ create policy "Users can manage their own watches"
   on watches for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Keeps status_changed_at correct regardless of which code path changes
+-- status (soft-delete, unsubscribe, the cron's expiry path, or anything
+-- added later) — see migration 003's header comment.
+create or replace function set_watch_status_changed_at() returns trigger
+language plpgsql
+as $$
+begin
+  if new.status is distinct from old.status then
+    new.status_changed_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_watches_status_changed_at on watches;
+create trigger trg_watches_status_changed_at
+  before update on watches
+  for each row
+  execute function set_watch_status_changed_at();
 
 -- ─────────────────────────────────────────────
 -- Price checks — belong to the ITINERARY, not to any one watcher
