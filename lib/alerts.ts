@@ -104,17 +104,31 @@ export type AlertTrigger = {
 /** Latest must be this far below the 7-day average to count as a drop. */
 const DROP_THRESHOLD = 0.10 // 10%
 
-/** Minimum total checks before any alert can fire. */
-const MIN_CHECKS = Math.max(2, parseInt(process.env.ALERT_MIN_CHECKS ?? '5', 10))
+/**
+ * Minimum total checks before any alert can fire. Was 5; raised to 7 on
+ * 2026-09-15 after replaying REAL price history (not synthetic noise)
+ * through this file's logic — see lib/__tests__/alerts-noise.test.mts and
+ * that day's investigation. 7/3%/5 ("candidate B") cut real alert volume
+ * on the most volatile observed route by ~25% (4 alerts -> 3 over the same
+ * 13-day window) with zero measured cost to detection speed on a genuine
+ * decline (both settings fired on the same day against a synthetic 20%
+ * drop). Tuning further than this doesn't help: SEA->YYZ's real fare
+ * swings up to 70% in a single day on the SAME flight (confirmed via
+ * flight_number — genuine bucket sellout/reopen, not a data bug), which
+ * dwarfs any margin change considered here. Cutting alert volume further
+ * would need a different mechanism (e.g. requiring a price to hold for two
+ * consecutive checks), not more threshold tuning.
+ */
+const MIN_CHECKS = Math.max(2, parseInt(process.env.ALERT_MIN_CHECKS ?? '7', 10))
 
 /** A new low must beat the previous low by at least this fraction. */
 const NEW_LOW_MARGIN = Math.max(
   0,
-  parseFloat(process.env.ALERT_NEW_LOW_MARGIN ?? '0.02') // 2%
+  parseFloat(process.env.ALERT_NEW_LOW_MARGIN ?? '0.03') // 3% — see MIN_CHECKS above
 )
 
 /** Minimum data points inside the 7-day window for the average to mean anything. */
-const MIN_WINDOW = Math.max(1, parseInt(process.env.ALERT_MIN_WINDOW ?? '3', 10))
+const MIN_WINDOW = Math.max(1, parseInt(process.env.ALERT_MIN_WINDOW ?? '5', 10))
 
 /** Latest must be this far below the last-reported (or watch-start) price. */
 const CUMULATIVE_DROP_THRESHOLD = Math.max(
