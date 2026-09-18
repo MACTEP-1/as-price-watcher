@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { createWatch } from '../../lib/api'
+import DatePickerField from '../../components/DatePickerField'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy' },
@@ -44,14 +45,14 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 /**
  * New-watch screen, mirroring app/watches/new/page.tsx on the web: same
  * fields, same validation rules, same POST /api/watches + navigate-to-detail
- * flow. The one deliberate difference is the date inputs — the web form
- * uses a native <input type="date">, which has no RN equivalent without a
- * new native dependency (@react-native-community/datetimepicker), and
- * adding a native module here means rebuilding the iOS dev client, which
- * this project has already been burned by once. Plain YYYY-MM-DD text
- * fields send the exact same string shape the API expects, so nothing
- * downstream needs to know the difference. A native date picker is a fine
- * follow-up once there's a dev build handy to test it against.
+ * flow. Dates use components/DatePickerField.tsx (@react-native-community/
+ * datetimepicker) rather than the web form's native <input type="date"> —
+ * see that component's header comment for the parsing details. This
+ * replaced a plain YYYY-MM-DD text field (2026-09-15), deferred until then
+ * because the native module needs a dev-client rebuild to test against.
+ * DATE_RE below still guards the submit path defensively even though the
+ * picker itself can't produce a malformed string — same "don't only trust
+ * the UI" reasoning as the web form re-checking what the API also enforces.
  */
 export default function NewWatchScreen() {
   const router = useRouter()
@@ -215,28 +216,22 @@ export default function NewWatchScreen() {
 
       <View style={styles.row}>
         <View style={isRoundTrip ? styles.half : styles.full}>
-          <Text style={styles.fieldLabel}>Depart date</Text>
-          <TextInput
-            style={styles.input}
+          <DatePickerField
+            label="Depart date"
             value={form.departDate}
-            onChangeText={(v) => set('departDate', v)}
+            onChange={(v) => set('departDate', v)}
+            minimumDate={minDate}
             placeholder={minDate}
-            placeholderTextColor="#94a3b8"
-            keyboardType="numbers-and-punctuation"
-            maxLength={10}
           />
         </View>
         {isRoundTrip && (
           <View style={styles.half}>
-            <Text style={styles.fieldLabel}>Return date</Text>
-            <TextInput
-              style={styles.input}
+            <DatePickerField
+              label="Return date"
               value={form.returnDate}
-              onChangeText={(v) => set('returnDate', v)}
+              onChange={(v) => set('returnDate', v)}
+              minimumDate={form.departDate || minDate}
               placeholder={form.departDate || minDate}
-              placeholderTextColor="#94a3b8"
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
             />
           </View>
         )}
