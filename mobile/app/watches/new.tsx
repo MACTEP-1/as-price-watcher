@@ -4,12 +4,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { createWatch } from '../../lib/api'
 import DatePickerField from '../../components/DatePickerField'
+import AirportAutocomplete from '../../components/AirportAutocomplete'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy' },
@@ -187,29 +187,19 @@ export default function NewWatchScreen() {
 
       <View style={styles.row}>
         <View style={styles.half}>
-          <Text style={styles.fieldLabel}>From (IATA)</Text>
-          <TextInput
-            style={styles.input}
+          <AirportAutocomplete
+            label="From"
             value={form.origin}
-            onChangeText={(v) => set('origin', v.toUpperCase())}
-            placeholder="SEA"
-            placeholderTextColor="#94a3b8"
-            maxLength={3}
-            autoCapitalize="characters"
-            autoCorrect={false}
+            onChange={(v) => set('origin', v)}
+            placeholder="Seattle or SEA"
           />
         </View>
         <View style={styles.half}>
-          <Text style={styles.fieldLabel}>To (IATA)</Text>
-          <TextInput
-            style={styles.input}
+          <AirportAutocomplete
+            label="To"
             value={form.destination}
-            onChangeText={(v) => set('destination', v.toUpperCase())}
-            placeholder="LAX"
-            placeholderTextColor="#94a3b8"
-            maxLength={3}
-            autoCapitalize="characters"
-            autoCorrect={false}
+            onChange={(v) => set('destination', v)}
+            placeholder="Los Angeles or LAX"
           />
         </View>
       </View>
@@ -313,20 +303,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   labelFirst: { marginTop: 0 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6 },
   row: { flexDirection: 'row', gap: 16, marginTop: 4 },
   half: { flex: 1 },
   full: { flex: 1 },
-  input: {
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: '#0f172a',
-    backgroundColor: '#fff',
-  },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pillSmall: {
     paddingVertical: 5,

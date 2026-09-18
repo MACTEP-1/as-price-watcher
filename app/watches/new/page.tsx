@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
+import AirportAutocomplete from '@/components/AirportAutocomplete'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy (Saver / Main)' },
@@ -156,14 +157,18 @@ export default function NewWatchPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>From (IATA)</label>
-              <input required maxLength={3} value={form.origin} onChange={(e) => set('origin', e.target.value.toUpperCase())} placeholder="SEA" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>To (IATA)</label>
-              <input required maxLength={3} value={form.destination} onChange={(e) => set('destination', e.target.value.toUpperCase())} placeholder="LAX" style={inputStyle} />
-            </div>
+            <AirportAutocomplete
+              label="From"
+              value={form.origin}
+              onChange={(v) => set('origin', v)}
+              placeholder="Seattle or SEA"
+            />
+            <AirportAutocomplete
+              label="To"
+              value={form.destination}
+              onChange={(v) => set('destination', v)}
+              placeholder="Los Angeles or LAX"
+            />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: isRoundTrip ? '1fr 1fr' : '1fr', gap: 16 }}>
