@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { WatchWithLatestPrice } from '@/types'
 import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor } from '@/lib/utils'
@@ -8,20 +9,38 @@ import PriceSparkline from './PriceSparkline'
 
 interface Props {
   watch: WatchWithLatestPrice
-  onDelete?: (id: string) => void
 }
 
-export default function WatchCard({ watch, onDelete }: Props) {
+export default function WatchCard({ watch }: Props) {
+  const router = useRouter()
   const [deleting, setDeleting] = useState(false)
 
   const cashChange = pctChange(watch.latest_cash, watch.prev_cash)
   const milesChange = pctChange(watch.latest_miles, watch.prev_miles)
 
+  /**
+   * The card refreshes the page itself rather than asking its parent to drop
+   * it. The dashboard (app/dashboard/page.tsx) is a SERVER component, which
+   * cannot pass a function prop to a client component — the old
+   * `onDelete?.()` callback was never wired up, so the delete succeeded but
+   * the button sat on "Removing…" forever (found 2026-09-21). router.refresh()
+   * re-runs the server component, whose query (lib/watches.ts) only returns
+   * active watches, so the removed card simply isn't rendered next time.
+   *
+   * A failed delete now resets the button and says so, instead of showing
+   * the same frozen state as a successful one.
+   */
   async function handleDelete() {
     if (!confirm(`Stop watching ${watch.origin} → ${watch.destination}?`)) return
     setDeleting(true)
-    await fetch(`/api/watches/${watch.id}`, { method: 'DELETE' })
-    onDelete?.(watch.id)
+    try {
+      const res = await fetch(`/api/watches/${watch.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      router.refresh()
+    } catch (err) {
+      setDeleting(false)
+      alert(`Couldn't remove this watch (${err instanceof Error ? err.message : 'unknown error'}). Try again.`)
+    }
   }
 
   return (
