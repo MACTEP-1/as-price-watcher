@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   FlatList,
+  Linking,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -23,10 +24,14 @@ import {
   formatCash,
   formatMiles,
   formatDate,
+  formatItineraryLine,
   pctChange,
   formatPctChange,
   changeColor,
 } from '../../lib/format'
+// Same Google-Flights-not-Alaska reasoning as the web card — see the file's
+// own header comment.
+import { googleFlightsUrl } from '../../lib/booking'
 
 export default function DashboardScreen() {
   const [watches, setWatches] = useState<WatchWithLatestPrice[]>([])
@@ -101,6 +106,10 @@ export default function DashboardScreen() {
         renderItem={({ item }) => {
           const cashChange = pctChange(item.latest_cash, item.prev_cash)
           const milesChange = pctChange(item.latest_miles, item.prev_miles)
+          const isRoundTrip = item.return_date !== null
+          const itineraryLine = formatItineraryLine(
+            item.price_history[item.price_history.length - 1] ?? null
+          )
           return (
             <Pressable
               style={styles.card}
@@ -128,7 +137,9 @@ export default function DashboardScreen() {
 
                 <View style={styles.grid}>
                   <View style={styles.col}>
-                    <Text style={styles.microLabel}>Cash</Text>
+                    <Text style={styles.microLabel}>
+                      {isRoundTrip ? 'Cash · round trip' : 'Cash'}
+                    </Text>
                     <Text
                       style={[
                         styles.cash,
@@ -151,7 +162,13 @@ export default function DashboardScreen() {
                     )}
                   </View>
                   <View style={styles.col}>
-                    <Text style={styles.microLabel}>Miles</Text>
+                    {/* Always a one-way award, even on a round trip, while
+                        the cash column beside it is the round-trip total —
+                        see components/WatchCard.tsx (web) and
+                        lib/miles/seats-aero-provider.ts. */}
+                    <Text style={styles.microLabel}>
+                      {isRoundTrip ? 'Miles · one-way' : 'Miles'}
+                    </Text>
                     <Text
                       style={[
                         styles.miles,
@@ -176,11 +193,28 @@ export default function DashboardScreen() {
                 </View>
               </View>
 
+              {!!itineraryLine && (
+                <Text style={styles.itineraryLine}>
+                  {isRoundTrip
+                    ? `Outbound ${itineraryLine} · return not priced separately`
+                    : itineraryLine}
+                </Text>
+              )}
+
               <View style={styles.footer}>
                 <Text style={styles.checkCount}>
                   {item.price_history.length} check
                   {item.price_history.length !== 1 ? 's' : ''}
                 </Text>
+                {/* Nested inside the card's Pressable, so it needs its own
+                    hitSlop and must not bubble — onPress on a child Pressable
+                    wins over the parent in RN, which is what we want here. */}
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => Linking.openURL(googleFlightsUrl(item))}
+                >
+                  <Text style={styles.linkOut}>Google Flights ↗</Text>
+                </Pressable>
               </View>
             </Pressable>
           )
@@ -268,6 +302,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   checkCount: { fontSize: 12, color: '#94a3b8' },
+  itineraryLine: {
+    fontSize: 12,
+    color: '#94a3b8',
+    paddingHorizontal: 18,
+    paddingBottom: 12,
+  },
+  linkOut: { fontSize: 12, color: '#0060ac', fontWeight: '500' },
 })

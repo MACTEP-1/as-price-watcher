@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { getWatchDetail, getWatchAlerts } from '../../../lib/watches'
@@ -8,12 +8,14 @@ import {
   formatCash,
   formatMiles,
   formatDate,
+  formatItineraryLine,
   pctChange,
   formatPctChange,
   changeColor,
   alertIcon,
   alertLabel,
 } from '../../../lib/format'
+import { googleFlightsUrl } from '../../../lib/booking'
 import SeatsAeroCredit from '../../components/SeatsAeroCredit'
 
 export default function WatchDetailScreen() {
@@ -68,6 +70,9 @@ export default function WatchDetailScreen() {
 
   const cashChange = pctChange(watch.latest_cash, watch.prev_cash)
   const milesChange = pctChange(watch.latest_miles, watch.prev_miles)
+  // `checks` is ordered oldest → newest by getWatchDetail, so the itinerary
+  // fields (flight number / stops / duration) come from the last row.
+  const latest = checks[checks.length - 1] ?? null
 
   return (
     <ScrollView
@@ -91,7 +96,9 @@ export default function WatchDetailScreen() {
 
         <View style={styles.grid}>
           <View style={styles.col}>
-            <Text style={styles.microLabel}>Cash</Text>
+            <Text style={styles.microLabel}>
+              {watch.return_date ? 'Cash · round trip' : 'Cash'}
+            </Text>
             <Text
               style={[styles.cash, watch.latest_cash === null && styles.priceMuted]}
             >
@@ -104,7 +111,11 @@ export default function WatchDetailScreen() {
             )}
           </View>
           <View style={styles.col}>
-            <Text style={styles.microLabel}>Miles</Text>
+            {/* One-way award even on a round trip — see the web detail page
+                and lib/miles/seats-aero-provider.ts. */}
+            <Text style={styles.microLabel}>
+              {watch.return_date ? 'Miles · one-way' : 'Miles'}
+            </Text>
             <Text
               style={[styles.miles, watch.latest_miles === null && styles.priceMuted]}
             >
@@ -117,6 +128,24 @@ export default function WatchDetailScreen() {
             )}
           </View>
         </View>
+
+        {/* For a round trip these fields describe the OUTBOUND only — the
+            provider never fetches the return legs, while the fare is already
+            the round-trip total. See lib/format.ts's formatItineraryLine. */}
+        {!!formatItineraryLine(latest) && (
+          <Text style={styles.itineraryLine}>
+            {watch.return_date ? 'Outbound: ' : 'Best: '}
+            {formatItineraryLine(latest)}
+            {watch.return_date ? ' · return not priced separately' : ''}
+          </Text>
+        )}
+
+        <Pressable
+          hitSlop={8}
+          onPress={() => Linking.openURL(googleFlightsUrl(watch))}
+        >
+          <Text style={styles.linkOut}>View on Google Flights ↗</Text>
+        </Pressable>
       </View>
 
       {/* Directly under the cash/miles card rather than at the bottom of the
@@ -201,6 +230,8 @@ const styles = StyleSheet.create({
   },
   route: { fontSize: 22, fontWeight: '700', color: '#0f172a' },
   meta: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  itineraryLine: { fontSize: 12, color: '#94a3b8', marginTop: 12 },
+  linkOut: { fontSize: 13, color: '#0060ac', fontWeight: '600', marginTop: 10 },
   metaCabin: { textTransform: 'capitalize' },
   grid: { marginTop: 18, flexDirection: 'row', gap: 20 },
   col: { flex: 1 },

@@ -18,6 +18,7 @@
     "../types/**/*.ts",
     "../lib/watches.ts",
     "../lib/format.ts",
-    "../lib/airports.ts"
+    "../lib/airports.ts",
+    "../lib/booking.ts"
   ]
 }
