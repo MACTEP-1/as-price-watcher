@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { searchAirports, type Airport } from '../../lib/airports'
+import { isKnownAirport, searchAirports, type Airport } from '../../lib/airports'
 
 /**
  * Mobile counterpart to components/AirportAutocomplete.tsx (web) — same
@@ -13,6 +13,13 @@ import { searchAirports, type Airport } from '../../lib/airports'
  * suggestion list on blur instead — delayed slightly so a tap on a
  * suggestion still registers first (same problem the web version solves
  * with onMouseDown-before-blur).
+ *
+ * Once the field is left holding a 3-letter code that isn't in the curated
+ * list, an amber hint asks the user to double-check it — same soft,
+ * non-blocking warning as the web form (`9cccc2b`), prompted by a ZEH→SEA
+ * watch (a typo for ZRH) that ran 5 daily checks without ever returning a
+ * price. Shown only after the field loses focus, so typing "ZUR" on the way
+ * to "Zurich" doesn't flash a warning mid-word.
  */
 
 interface Props {
@@ -24,9 +31,11 @@ interface Props {
 
 export default function AirportAutocomplete({ label, value, onChange, placeholder }: Props) {
   const [open, setOpen] = useState(false)
+  const [focused, setFocused] = useState(false)
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const results = searchAirports(value, 5)
+  const unknownCode = !focused && /^[A-Z]{3}$/.test(value) && !isKnownAirport(value)
 
   function pick(airport: Airport) {
     onChange(airport.code)
@@ -35,10 +44,12 @@ export default function AirportAutocomplete({ label, value, onChange, placeholde
 
   function handleFocus() {
     if (blurTimeout.current) clearTimeout(blurTimeout.current)
+    setFocused(true)
     setOpen(true)
   }
 
   function handleBlur() {
+    setFocused(false)
     blurTimeout.current = setTimeout(() => setOpen(false), 150)
   }
 
@@ -46,7 +57,7 @@ export default function AirportAutocomplete({ label, value, onChange, placeholde
     <View>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, unknownCode && styles.inputWarn]}
         value={value}
         onChangeText={(v) => onChange(v.toUpperCase())}
         onFocus={handleFocus}
@@ -56,6 +67,12 @@ export default function AirportAutocomplete({ label, value, onChange, placeholde
         autoCapitalize="characters"
         autoCorrect={false}
       />
+      {unknownCode && (
+        <Text style={styles.warnText}>
+          {value} isn&apos;t in our airport list — double-check the code.
+        </Text>
+      )}
+
       {open && results.length > 0 && (
         <View style={styles.dropdown}>
           {results.map((a, i) => (
@@ -88,6 +105,8 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     backgroundColor: '#fff',
   },
+  inputWarn: { borderColor: '#f59e0b' },
+  warnText: { fontSize: 12, color: '#b45309', marginTop: 6 },
   dropdown: {
     marginTop: 6,
     borderWidth: 1.5,

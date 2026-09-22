@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import {
+  Alert as RNAlert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { getWatchDetail, getWatchAlerts } from '../../../lib/watches'
+import { removeWatch } from '../../lib/api'
 import type { Alert, PriceCheck, WatchWithLatestPrice } from '../../../types'
 import {
   formatCash,
@@ -26,6 +35,7 @@ export default function WatchDetailScreen() {
   const [checks, setChecks] = useState<PriceCheck[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
+  const [removing, setRemoving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -74,6 +84,48 @@ export default function WatchDetailScreen() {
   // `checks` is ordered oldest → newest by getWatchDetail, so the itinerary
   // fields (flight number / stops / duration) come from the last row.
   const latest = checks[checks.length - 1] ?? null
+  const cashPrices = checks
+    .map((c) => c.cash_price)
+    .filter((p): p is number => p !== null)
+  const milesPrices = checks
+    .map((c) => c.miles_price)
+    .filter((p): p is number => p !== null)
+
+  /**
+   * Remove lives HERE, not on the dashboard cards: the whole card is one
+   * big tap target on a phone, and a destructive action beside it is too
+   * easy to hit by accident. Uses the native confirm dialog (RNAlert —
+   * aliased because `Alert` is already this file's imported alert-row
+   * type). The dashboard reloads on focus (app/index.tsx), which is what
+   * makes the removed watch actually disappear when this screen pops.
+   */
+  function confirmRemove() {
+    if (!watch) return
+    RNAlert.alert(
+      'Remove watch',
+      `Stop watching ${watch.origin} → ${watch.destination}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setRemoving(true)
+            try {
+              await removeWatch(watch.id)
+              router.back()
+            } catch (err) {
+              setRemoving(false)
+              RNAlert.alert(
+                'Could not remove',
+                err instanceof Error ? err.message : 'Something went wrong',
+              )
+            }
+          },
+        },
+      ],
+    )
+  }
 
   return (
     <ScrollView
@@ -217,6 +269,81 @@ export default function WatchDetailScreen() {
           </View>
         </>
       )}
+
+      {checks.length >= 2 && (cashPrices.length > 0 || milesPrices.length > 0) && (
+        <>
+          <Text style={styles.sectionTitle}>Stats</Text>
+          <View style={styles.statsCard}>
+            {cashPrices.length > 0 && (
+              <View style={styles.statsRow}>
+                <View style={styles.statCol}>
+                  <Text style={styles.statLabel}>Cash low</Text>
+                  <Text style={[styles.statValue, styles.statCash]}>
+                    {formatCash(Math.min(...cashPrices))}
+                  </Text>
+                </View>
+                <View style={styles.statCol}>
+                  <Text style={styles.statLabel}>Cash avg</Text>
+                  <Text style={styles.statValue}>
+                    {formatCash(
+                      Math.round(
+                        cashPrices.reduce((a, b) => a + b, 0) / cashPrices.length,
+                      ),
+                    )}
+                  </Text>
+                </View>
+                <View style={styles.statCol}>
+                  <Text style={styles.statLabel}>Cash high</Text>
+                  <Text style={styles.statValue}>
+                    {formatCash(Math.max(...cashPrices))}
+                  </Text>
+                </View>
+              </View>
+            )}
+            {milesPrices.length > 0 && (
+              <View
+                style={[
+                  styles.statsRow,
+                  cashPrices.length > 0 && styles.statsRowDivided,
+                ]}
+              >
+                <View style={styles.statCol}>
+                  <Text style={styles.statLabel}>Miles low</Text>
+                  <Text style={[styles.statValue, styles.statMiles]}>
+                    {formatMiles(Math.min(...milesPrices))}
+                  </Text>
+                </View>
+                <View style={styles.statCol}>
+                  <Text style={styles.statLabel}>Miles avg</Text>
+                  <Text style={styles.statValue}>
+                    {formatMiles(
+                      Math.round(
+                        milesPrices.reduce((a, b) => a + b, 0) / milesPrices.length,
+                      ),
+                    )}
+                  </Text>
+                </View>
+                <View style={styles.statCol}>
+                  <Text style={styles.statLabel}>Miles high</Text>
+                  <Text style={styles.statValue}>
+                    {formatMiles(Math.max(...milesPrices))}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        </>
+      )}
+
+      <Pressable
+        onPress={confirmRemove}
+        disabled={removing}
+        style={[styles.removeBtn, removing && styles.removeBtnDisabled]}
+      >
+        <Text style={styles.removeText}>
+          {removing ? 'Removing…' : 'Remove watch'}
+        </Text>
+      </Pressable>
     </ScrollView>
   )
 }
@@ -238,6 +365,37 @@ const styles = StyleSheet.create({
   route: { fontSize: 22, fontWeight: '700', color: '#0f172a' },
   meta: { fontSize: 13, color: '#64748b', marginTop: 4 },
   itineraryLine: { fontSize: 12, color: '#94a3b8', marginTop: 12 },
+  statsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    paddingVertical: 14,
+  },
+  statsRow: { flexDirection: 'row' },
+  statsRowDivided: {
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    marginTop: 14,
+    paddingTop: 14,
+  },
+  statCol: { flex: 1, alignItems: 'center' },
+  statLabel: { fontSize: 12, color: '#94a3b8', marginBottom: 4 },
+  statValue: { fontSize: 17, fontWeight: '700', color: '#334155' },
+  statCash: { color: '#0060ac' },
+  statMiles: { color: '#00a551' },
+  removeBtn: {
+    marginTop: 24,
+    marginBottom: 8,
+    paddingVertical: 13,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#fecaca',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  removeBtnDisabled: { opacity: 0.6 },
+  removeText: { color: '#dc2626', fontSize: 14, fontWeight: '600' },
   competitorLine: { fontSize: 12, color: '#b45309', marginTop: 6 },
   linkOut: { fontSize: 13, color: '#0060ac', fontWeight: '600', marginTop: 10 },
   metaCabin: { textTransform: 'capitalize' },

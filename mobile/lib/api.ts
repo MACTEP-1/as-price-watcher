@@ -83,3 +83,32 @@ export async function createWatch(params: {
   }
   return body
 }
+
+/**
+ * Soft-deletes a watch via DELETE /api/watches/[id] — the same route the
+ * web card uses (components/WatchCard.tsx). No mobile-specific endpoint:
+ * the route already accepts this app's Bearer token through the dual-scheme
+ * auth in lib/supabase/server.ts, so nothing server-side had to change for
+ * mobile to gain remove (2026-09-22; it was missing simply because this app
+ * started as a read-only scaffold, not by decision).
+ *
+ * The caller is responsible for refreshing the list afterwards. On web that
+ * is router.refresh(); here the dashboard reloads on focus, which is what
+ * makes a removal disappear when you navigate back.
+ */
+export async function removeWatch(id: string): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not signed in')
+
+  const res = await fetch(`${API_BASE}/api/watches/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error ?? `Could not remove watch (${res.status})`)
+  }
+}

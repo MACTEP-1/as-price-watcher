@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   FlatList,
   Linking,
@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 // Reused unchanged from the web app — this file has no next/* imports by
 // design (see its own header comment), so it works from any client that
@@ -49,9 +49,20 @@ export default function DashboardScreen() {
     setWatches(rows)
   }, [])
 
-  useEffect(() => {
-    load().finally(() => setLoading(false))
-  }, [load])
+  /**
+   * Reloads every time this screen comes into focus, not just on mount.
+   * A plain useEffect ran once and never again, so anything changed on
+   * another screen — a watch removed on the detail screen, or a new watch
+   * created — left a stale list behind until a manual pull-to-refresh.
+   * That is the same class of bug as the web card's frozen "Removing…"
+   * (`7ee6966`), and it is what makes mobile's new remove action actually
+   * appear to work.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      load().finally(() => setLoading(false))
+    }, [load])
+  )
 
   async function onRefresh() {
     setRefreshing(true)
