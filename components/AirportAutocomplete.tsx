@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { searchAirports, type Airport } from '@/lib/airports'
+import { isKnownAirport, searchAirports, type Airport } from '@/lib/airports'
 
 /**
  * Origin/destination field for app/watches/new/page.tsx. Typing a city or
@@ -10,6 +10,12 @@ import { searchAirports, type Airport } from '@/lib/airports'
  * onChange, so someone who already knows the 3-letter code can just type it
  * and submit exactly as before — the API (app/api/watches/route.ts) is the
  * one place that actually enforces "3 uppercase letters", unchanged.
+ *
+ * Once the field loses focus holding a 3-letter code that isn't in the
+ * curated list, a soft amber hint asks the user to double-check it. It never
+ * blocks submitting — the list is small by design, so a real airport can be
+ * missing from it. Shown only after blur, so typing "ZUR" on the way to
+ * "Zurich" doesn't flash a warning mid-word.
  */
 
 const inputStyle: React.CSSProperties = {
@@ -32,6 +38,7 @@ interface Props {
 
 export default function AirportAutocomplete({ label, value, onChange, placeholder }: Props) {
   const [open, setOpen] = useState(false)
+  const [focused, setFocused] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -45,6 +52,7 @@ export default function AirportAutocomplete({ label, value, onChange, placeholde
   }, [])
 
   const results = searchAirports(value, 6)
+  const unknownCode = !focused && /^[A-Z]{3}$/.test(value) && !isKnownAirport(value)
 
   function pick(airport: Airport) {
     onChange(airport.code)
@@ -58,11 +66,26 @@ export default function AirportAutocomplete({ label, value, onChange, placeholde
         required
         value={value}
         onChange={(e) => onChange(e.target.value.toUpperCase())}
-        onFocus={() => setOpen(true)}
+        onFocus={() => { setFocused(true); setOpen(true) }}
+        // Closing here also fixes Tab-ing away leaving the list open (the
+        // outside-click listener only sees mouse clicks). Safe for picks: the
+        // suggestion buttons preventDefault on mousedown, so clicking one
+        // never blurs the input in the first place.
+        onBlur={() => { setFocused(false); setOpen(false) }}
         placeholder={placeholder}
-        style={inputStyle}
+        style={{ ...inputStyle, ...(unknownCode ? { borderColor: '#f59e0b' } : null) }}
         autoComplete="off"
+        aria-describedby={unknownCode ? `${label}-unknown-code` : undefined}
       />
+      {unknownCode && (
+        <p
+          id={`${label}-unknown-code`}
+          role="status"
+          style={{ margin: '6px 0 0', fontSize: 12, color: '#b45309' }}
+        >
+          {value} isn&apos;t in our airport list — double-check the code.
+        </p>
+      )}
       {open && results.length > 0 && (
         <div
           style={{

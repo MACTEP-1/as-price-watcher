@@ -234,6 +234,20 @@ export const AIRPORTS: Airport[] = [
   { code: 'AKL', city: 'Auckland', country: 'NZ', name: 'Auckland Airport' },
 ]
 
+const KNOWN_CODES = new Set(AIRPORTS.map((a) => a.code))
+
+/**
+ * Whether `code` is in the curated list above. Used ONLY for a soft,
+ * non-blocking "double-check this code" hint on the new-watch forms — never
+ * to reject a submission. The list is deliberately small (see the header
+ * comment), so "not known" means "worth a second look", not "invalid". Added
+ * 2026-09-21 after a ZEH→SEA watch (a typo for ZRH) ran 5 daily checks
+ * without ever returning a price.
+ */
+export function isKnownAirport(code: string): boolean {
+  return KNOWN_CODES.has(code.trim().toUpperCase())
+}
+
 /**
  * Ranked, case-insensitive search over AIRPORTS by code, city, or airport
  * name. Empty/whitespace query returns [] deliberately — the autocomplete
