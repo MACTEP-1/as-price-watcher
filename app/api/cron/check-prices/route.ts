@@ -303,7 +303,11 @@ async function runPriceCheck(): Promise<NextResponse> {
         const trigger = evaluateAlerts(
           history as PriceCheck[],
           lastAlert
-            ? { cashPrice: lastAlert.cash_price, milesPrice: lastAlert.miles_price }
+            ? {
+                cashPrice: lastAlert.cash_price,
+                milesPrice: lastAlert.miles_price,
+                reportedAt: lastAlert.triggered_at,
+              }
             : null
         )
 

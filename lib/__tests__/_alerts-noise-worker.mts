@@ -106,7 +106,11 @@ const declineSweep: ProfileResult['declineSweep'] = DECLINE_SWEEP_LEVELS.map(
 // simulated as a STATEFUL cron would run it — lastReported only updates
 // when an alert actually fires, same as production must.
 let ratchetPrice = 500
-let ratchetLastReported: { cashPrice: number | null; milesPrice: number | null } | null = null
+let ratchetLastReported: {
+  cashPrice: number | null
+  milesPrice: number | null
+  reportedAt: string
+} | null = null
 const ratchetHistory: PriceCheck[] = []
 const ratchetFires: Array<{ day: number; type: string; price: number; anchor: number | null }> = []
 for (let day = 0; day < 40; day++) {
@@ -119,7 +123,11 @@ for (let day = 0; day < 40; day++) {
       price: ratchetHistory[ratchetHistory.length - 1].cash_price as number,
       anchor: trigger.baselineCashPrice,
     })
-    ratchetLastReported = { cashPrice: trigger.cashPrice, milesPrice: trigger.milesPrice }
+    ratchetLastReported = {
+      cashPrice: trigger.cashPrice,
+      milesPrice: trigger.milesPrice,
+      reportedAt: ratchetHistory[ratchetHistory.length - 1].checked_at,
+    }
   }
   ratchetPrice *= 0.9865 // ~1.35%/day — under NEW_LOW_MARGIN and DROP_THRESHOLD's
   // per-step bite, so new_low/drop_10pct structurally can't fire here; only

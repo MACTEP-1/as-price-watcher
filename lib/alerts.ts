@@ -8,6 +8,9 @@
  *      TOLD ABOUT — the anchor for this one only moves when an alert
  *      actually fires, unlike 1 and 2                                   ("cumulative_drop")
  *
+ * (1) is additionally skipped when it would just repeat a price the user
+ * was told about in the last week — see REPEAT_GATE_DAYS.
+ *
  * Only one alert per watch per 24h to avoid spam (throttled by the caller).
  *
  * ── Why the noise guards below exist ──────────────────────────────────────
@@ -64,6 +67,8 @@ import type { PriceCheck } from '@/types'
 export interface LastReportedPrice {
   cashPrice: number | null
   milesPrice: number | null
+  /** When that alert fired (alerts.triggered_at) — drives the repeat gate below. */
+  reportedAt: string
 }
 
 export type AlertTrigger = {
@@ -129,6 +134,21 @@ const NEW_LOW_MARGIN = Math.max(
 
 /** Minimum data points inside the 7-day window for the average to mean anything. */
 const MIN_WINDOW = Math.max(1, parseInt(process.env.ALERT_MIN_WINDOW ?? '5', 10))
+
+/**
+ * How long a reported price keeps suppressing repeat "drop_10pct" alerts.
+ * Deliberately the SAME length as the rolling-average window, because that
+ * window is the cause: after a sharp drop, the pre-drop prices keep the
+ * 7-day average high for days, so the unchanged new price stays "≥10% below
+ * the average" and was re-announced — observed for real: $612 alerted on
+ * 09/11 and again, unchanged, on 09/12 (found by a second chat, 2026-09-21).
+ * Once a report is older than the window, the average no longer contains
+ * the prices that made it look like a drop, so the repetition mechanism is
+ * gone and the gate steps aside. That also keeps a stale report from muting
+ * real news: told $500 a month ago, rebounded to $900, now $700 IS a fresh
+ * ≥10% weekly drop worth sending, even though it's above $500.
+ */
+const REPEAT_GATE_DAYS = 7
 
 /** Latest must be this far below the last-reported (or watch-start) price. */
 const CUMULATIVE_DROP_THRESHOLD = Math.max(
@@ -223,15 +243,31 @@ export function evaluateAlerts(
   }
 
   // ── Check: ≥10% drop from 7-day average ───────────────────────────
+  // Gated on "not already told": if the user got an alert within
+  // REPEAT_GATE_DAYS, the latest price must also beat what they were told by
+  // NEW_LOW_MARGIN — the same "a real improvement, not a rounding wobble"
+  // bar a new low has to clear. See REPEAT_GATE_DAYS for why. new_low needs
+  // no such gate (it's below every prior price, including the reported
+  // one), and cumulative_drop is anchored to the reported price already.
+  const reportIsRecent =
+    lastReported !== null &&
+    new Date(latest.checked_at).getTime() - new Date(lastReported.reportedAt).getTime() <=
+      REPEAT_GATE_DAYS * 24 * 60 * 60 * 1000
+
+  const alreadyTold = (latestPrice: number, told: number | null | undefined): boolean =>
+    reportIsRecent && told != null && !(latestPrice < told * (1 - NEW_LOW_MARGIN))
+
   const cashDropped =
     latest.cash_price !== null &&
     avgCash !== null &&
-    (avgCash - latest.cash_price) / avgCash >= DROP_THRESHOLD
+    (avgCash - latest.cash_price) / avgCash >= DROP_THRESHOLD &&
+    !alreadyTold(latest.cash_price, lastReported?.cashPrice)
 
   const milesDropped =
     latest.miles_price !== null &&
     avgMiles !== null &&
-    (avgMiles - latest.miles_price) / avgMiles >= DROP_THRESHOLD
+    (avgMiles - latest.miles_price) / avgMiles >= DROP_THRESHOLD &&
+    !alreadyTold(latest.miles_price, lastReported?.milesPrice)
 
   if (cashDropped || milesDropped) {
     return {
