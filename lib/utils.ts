@@ -18,4 +18,5 @@ export {
   changeColor,
   alertIcon,
   alertLabel,
+  formatItineraryLine,
 } from './format'

@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine } from '@/lib/utils'
+import { googleFlightsUrl } from '@/lib/booking'
 import PriceSparkline from './PriceSparkline'
 
 interface Props {
@@ -17,6 +18,10 @@ export default function WatchCard({ watch }: Props) {
 
   const cashChange = pctChange(watch.latest_cash, watch.prev_cash)
   const milesChange = pctChange(watch.latest_miles, watch.prev_miles)
+
+  const isRoundTrip = watch.return_date !== null
+  const latestCheck = watch.price_history[watch.price_history.length - 1] ?? null
+  const itineraryLine = formatItineraryLine(latestCheck)
 
   /**
    * The card refreshes the page itself rather than asking its parent to drop
@@ -67,7 +72,9 @@ export default function WatchCard({ watch }: Props) {
 
         <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
-            <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cash</p>
+            <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Cash{isRoundTrip ? ' · round trip' : ''}
+            </p>
             <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: watch.latest_cash !== null ? '#0060ac' : '#94a3b8' }}>{formatCash(watch.latest_cash)}</p>
             {cashChange !== null && (
               <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: changeColor(cashChange) }}>
@@ -82,7 +89,14 @@ export default function WatchCard({ watch }: Props) {
           </div>
 
           <div>
-            <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Miles</p>
+            {/* Miles is ALWAYS a one-way award: lib/miles/seats-aero-provider.ts
+                only ever queries origin→destination on depart_date, even for a
+                round trip. Labelling it matters because the cash figure beside
+                it IS the round-trip total — the two sat side by side reading as
+                comparable until 2026-09-22. */}
+            <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Miles{isRoundTrip ? ' · one-way' : ''}
+            </p>
             <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: watch.latest_miles !== null ? '#00a551' : '#94a3b8' }}>{formatMiles(watch.latest_miles)}</p>
             {milesChange !== null && (
               <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: changeColor(milesChange) }}>
@@ -96,12 +110,29 @@ export default function WatchCard({ watch }: Props) {
             )}
           </div>
         </div>
+
+        {itineraryLine && (
+          <p style={{ margin: '12px 0 0', fontSize: 12, color: '#94a3b8' }}>
+            {isRoundTrip ? `Outbound ${itineraryLine} · return not priced separately` : itineraryLine}
+          </p>
+        )}
       </Link>
 
-      <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ fontSize: 12, color: '#94a3b8' }}>
           {watch.price_history.length} check{watch.price_history.length !== 1 ? 's' : ''}
         </span>
+        {/* Outside the <Link> above — a nested <a> is invalid HTML and React
+            will not render it. See lib/booking.ts for why Google and not
+            alaskaair.com. */}
+        <a
+          href={googleFlightsUrl(watch)}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontSize: 12, color: '#0060ac', textDecoration: 'none', marginLeft: 'auto', marginRight: 12 }}
+        >
+          View on Google Flights ↗
+        </a>
         <button
           onClick={handleDelete}
           disabled={deleting}

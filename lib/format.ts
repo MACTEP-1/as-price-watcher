@@ -95,3 +95,55 @@ export function alertLabel(type: 'drop_10pct' | 'new_low' | 'cumulative_drop'): 
       return 'Price dropped ≥10%'
   }
 }
+
+/**
+ * "AS326" as stored → "AS 326". The provider strips the space SerpApi sends
+ * (lib/flights/serpapi-provider.ts) so the value is a stable key; this puts
+ * it back for display only.
+ */
+export function formatFlightNumber(flightNumber: string | null): string | null {
+  if (!flightNumber) return null
+  const m = flightNumber.match(/^([A-Z]{2})\s*(\d+)$/i)
+  return m ? `${m[1].toUpperCase()} ${m[2]}` : flightNumber
+}
+
+export function formatStops(stops: number | null): string | null {
+  if (stops === null) return null
+  if (stops === 0) return 'nonstop'
+  return stops === 1 ? '1 stop' : `${stops} stops`
+}
+
+export function formatDuration(minutes: number | null): string | null {
+  if (minutes === null || minutes <= 0) return null
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+/**
+ * One line describing the itinerary a stored price actually belongs to,
+ * e.g. "AS 326 · nonstop · 5h 27m". Returns '' when nothing is known.
+ *
+ * IMPORTANT, and the reason this exists: for a ROUND TRIP these three
+ * fields describe the OUTBOUND journey only. SerpApi returns the return
+ * legs only behind a second call with a `departure_token`, which the
+ * provider skips to stay inside the SerpApi quota — while `price` is
+ * already the full round-trip fare. So the card must label this as the
+ * outbound, or a one-stop return reads as a nonstop trip. (Fetching the
+ * return legs is a deliberate future item, gated on a paid SerpApi plan —
+ * see the project status doc, 2026-09-22.)
+ */
+export function formatItineraryLine(check: {
+  flight_number: string | null
+  stops: number | null
+  duration_minutes: number | null
+} | null | undefined): string {
+  if (!check) return ''
+  return [
+    formatFlightNumber(check.flight_number),
+    formatStops(check.stops),
+    formatDuration(check.duration_minutes),
+  ]
+    .filter((part): part is string => !!part)
+    .join(' · ')
+}

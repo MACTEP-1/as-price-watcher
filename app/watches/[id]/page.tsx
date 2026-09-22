@@ -5,7 +5,8 @@ import { getWatchDetail } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine } from '@/lib/utils'
+import { googleFlightsUrl } from '@/lib/booking'
 import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
 export const revalidate = 0
@@ -76,13 +77,37 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
                 {formatPctChange(cashChange)} since last check
               </p>
             )}
-            {latest?.flight_number && (
-              <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>Best: {latest.flight_number}</p>
+            {/* For a round trip these fields describe the OUTBOUND only —
+                the provider never fetches the return legs, while `price` is
+                the full round-trip fare. See lib/format.ts's
+                formatItineraryLine. */}
+            {formatItineraryLine(latest) && (
+              <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>
+                {watch.return_date ? 'Outbound: ' : 'Best: '}
+                {formatItineraryLine(latest)}
+                {watch.return_date ? ' · return not priced separately' : ''}
+              </p>
             )}
+            <p style={{ margin: '8px 0 0', fontSize: 12 }}>
+              <a
+                href={googleFlightsUrl(watch)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#0060ac', textDecoration: 'none' }}
+              >
+                View on Google Flights ↗
+              </a>
+            </p>
           </div>
 
           <div style={card}>
-            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Miles price</p>
+            {/* Always a ONE-WAY award — seats.aero is only ever queried for
+                origin→destination on depart_date (lib/miles/seats-aero-provider.ts),
+                even for a round trip, while the cash card beside this one
+                shows the round-trip total. */}
+            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {watch.return_date ? 'Miles price · one-way' : 'Miles price'}
+            </p>
             <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: (latest?.miles_price ?? null) !== null ? '#00a551' : '#94a3b8' }}>{formatMiles(latest?.miles_price ?? null)}</p>
             {milesChange !== null && (
               <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 500, color: changeColor(milesChange) }}>
