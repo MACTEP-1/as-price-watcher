@@ -156,11 +156,27 @@ async function runPriceCheck(): Promise<NextResponse> {
   //
   // A rolling window rather than a calendar day: "same UTC day" would let a
   // run just after midnight re-check something measured 40 minutes earlier,
-  // and would block a legitimate re-run 23 hours later. 20h leaves margin
-  // under the 24h cadence while absorbing a retry half an hour behind.
+  // and would block a legitimate re-run 23 hours later.
+  //
+  // 20h -> 12h on 2026-09-22. The original 20h "leaves margin under the 24h
+  // cadence" reasoning ignored where the FIRST check comes from: creating a
+  // watch stores one immediately (POST /api/watches), at whatever hour the
+  // user happens to be awake. With a 13:07 run and a 20h window, a new
+  // watch survives to the next run only if it was created between 13:07 and
+  // 17:07 UTC — a four-hour slot (6–10am Pacific). Every watch created
+  // outside it silently skipped its first scheduled run and waited two days
+  // for its second data point, on top of MIN_CHECKS (lib/alerts.ts) needing
+  // 7 before any alert can fire. Observed on the real ZRH→SEA (created
+  // 23:42, skipped next morning) and SEA→TPA (created 18:01, would have
+  // skipped too).
+  //
+  // 12h keeps what this guard is actually for — a retry minutes or an hour
+  // after a failed run must not re-spend SerpApi quota or insert a
+  // duplicate — while never eating a scheduled daily run: at 13:07 it now
+  // only skips something already checked since ~01:07 the same morning.
   const minHoursBetweenChecks = Math.max(
     0,
-    parseFloat(process.env.CRON_MIN_HOURS_BETWEEN_CHECKS ?? '20') || 20
+    parseFloat(process.env.CRON_MIN_HOURS_BETWEEN_CHECKS ?? '12') || 12
   )
 
   const recentlyChecked = new Set<string>()
