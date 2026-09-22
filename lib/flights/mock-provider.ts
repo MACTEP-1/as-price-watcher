@@ -75,6 +75,18 @@ export class MockFlightPriceProvider implements FlightPriceProvider {
     const fnIndex = Math.floor(seededRandom(seed + 'fn') * AS_FLIGHT_NUMBERS.length)
     const flightNumber = AS_FLIGHT_NUMBERS[fnIndex]
 
-    return { cashPrice, currency: 'USD', flightNumber, durationMinutes, stops }
+    // Deterministic fake rival on ~1 in 3 routes, so UI work against the
+    // mock provider actually exercises the competitor line.
+    const rivalRand = seededRandom(seed + 'rival')
+    const hasRival = rivalRand > 0.66
+    return {
+      cashPrice,
+      currency: 'USD',
+      flightNumber,
+      durationMinutes,
+      stops,
+      competitorCashPrice: hasRival ? Math.round((cashPrice * 0.75) / 5) * 5 : null,
+      competitorAirline: hasRival ? 'United' : null,
+    }
   }
 }

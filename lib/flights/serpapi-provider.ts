@@ -52,6 +52,16 @@ function carrierOf(leg: SerpFlightLeg | undefined): string | null {
   return match ? match[1].toUpperCase() : null
 }
 
+/**
+ * How Google names the marketing carrier, e.g. "United". Falls back to the
+ * two-letter code when the name is missing, so the UI always has something
+ * to print next to a competitor price.
+ */
+function airlineNameOf(itin: SerpItinerary): string | null {
+  const leg = itin.flights?.[0]
+  return leg?.airline ?? carrierOf(leg) ?? null
+}
+
 function isAlaska(itin: SerpItinerary): boolean {
   return (itin.flights ?? []).some(
     (leg) => carrierOf(leg) === 'AS' || leg.airline === 'Alaska Airlines'
@@ -166,14 +176,30 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     }
 
     const candidates = alaska.length > 0 ? alaska : all
-    // const best = candidates.reduce((a, b) => (a.price! <= b.price! ? a : b))
-    
+
     // Sort a COPY — Array.sort mutates in place, and `candidates` is a live
     // reference to `alaska` or `all`. See compareItineraries above for why
     // this is a full sort rather than a cheaper "min by price" reduce:
     // ties have to break the same way on every call, or the stored
     // flight_number churns between equal-priced flights.
     const best = [...candidates].sort(compareItineraries)[0]
+
+    // ── Cheapest on ANY airline, for context ───────────────────────────
+    //
+    // Free: `all` is already in hand — every carrier came back in the same
+    // response and our own filter above is what narrows it to Alaska. On
+    // SEA→TPA Nov 10–15 that discarded a $427 United fare while tracking
+    // Alaska at $686, with nothing in the UI hinting it existed.
+    //
+    // Reported only when it genuinely beats the tracked fare AND isn't the
+    // same itinerary: when the route has no Alaska service at all,
+    // `candidates` IS `all`, so `best` is already the cheapest of any
+    // airline and there is no "competitor" to name (`airline` on the row
+    // describes it instead). Same deterministic ordering, so the airline
+    // named doesn't churn between equal-priced rivals.
+    const cheapestOverall = [...all].sort(compareItineraries)[0]
+    const hasCheaperRival =
+      cheapestOverall !== best && cheapestOverall.price! < best.price!
 
     const legs = best.flights ?? []
     const firstLeg = legs[0]
@@ -191,6 +217,8 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
       flightNumber: firstLeg?.flight_number?.replace(/\s+/g, '') ?? null,
       durationMinutes: best.total_duration ?? null,
       stops,
+      competitorCashPrice: hasCheaperRival ? cheapestOverall.price! : null,
+      competitorAirline: hasCheaperRival ? airlineNameOf(cheapestOverall) : null,
     }
   }
 }

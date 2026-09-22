@@ -25,6 +25,7 @@ import {
   formatMiles,
   formatDate,
   formatItineraryLine,
+  formatCompetitorLine,
   pctChange,
   formatPctChange,
   changeColor,
@@ -107,9 +108,9 @@ export default function DashboardScreen() {
           const cashChange = pctChange(item.latest_cash, item.prev_cash)
           const milesChange = pctChange(item.latest_miles, item.prev_miles)
           const isRoundTrip = item.return_date !== null
-          const itineraryLine = formatItineraryLine(
-            item.price_history[item.price_history.length - 1] ?? null
-          )
+          const latestCheck = item.price_history[item.price_history.length - 1] ?? null
+          const itineraryLine = formatItineraryLine(latestCheck)
+          const competitorLine = formatCompetitorLine(latestCheck)
           return (
             <Pressable
               style={styles.card}
@@ -198,6 +199,13 @@ export default function DashboardScreen() {
                   {isRoundTrip
                     ? `Outbound ${itineraryLine} · return not priced separately`
                     : itineraryLine}
+                </Text>
+              )}
+
+              {/* Context only — never an alert. See lib/format.ts. */}
+              {!!competitorLine && (
+                <Text style={styles.competitorLine}>
+                  Cheaper elsewhere: {competitorLine}
                 </Text>
               )}
 
@@ -312,6 +320,13 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     paddingHorizontal: 18,
     paddingBottom: 12,
+  },
+  competitorLine: {
+    fontSize: 12,
+    color: '#b45309',
+    paddingHorizontal: 18,
+    paddingBottom: 12,
+    marginTop: -6,
   },
   linkOut: { fontSize: 12, color: '#0060ac', fontWeight: '500' },
 })

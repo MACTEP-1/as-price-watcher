@@ -48,6 +48,12 @@ export interface PriceCheck {
   flight_number: string | null
   duration_minutes: number | null
   stops: number
+  // Cheapest fare on any airline in the same search, when it beat the
+  // Alaska fare above (migration 004). Null when nothing beat it, or when
+  // `airline` is itself a non-Alaska fallback. Display-only — alerts
+  // deliberately ignore it (see lib/alerts.ts).
+  competitor_cash_price: number | null
+  competitor_airline: string | null
 }
 
 /**

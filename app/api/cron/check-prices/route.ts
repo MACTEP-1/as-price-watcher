@@ -253,6 +253,8 @@ async function runPriceCheck(): Promise<NextResponse> {
         flight_number: cash?.flightNumber ?? null,
         duration_minutes: cash?.durationMinutes ?? null,
         stops: cash?.stops ?? 0,
+        competitor_cash_price: cash?.competitorCashPrice ?? null,
+        competitor_airline: cash?.competitorAirline ?? null,
       })
 
       if (insertError) {

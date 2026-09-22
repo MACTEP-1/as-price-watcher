@@ -57,6 +57,11 @@ export class DuffelFlightProvider implements FlightPriceProvider {
       flightNumber: firstSeg ? `${firstSeg.operating_carrier?.iata_code}${firstSeg.operating_carrier_flight_number}` : null,
       durationMinutes,
       stops: (firstSlice?.segments?.length ?? 1) - 1,
+      // Duffel is queried per-airline, so there is no "everyone else's
+      // fares in the same response" to mine the way the SerpApi provider
+      // does. Always null rather than pretending Alaska is cheapest.
+      competitorCashPrice: null,
+      competitorAirline: null,
     }
   }
 }

@@ -5,7 +5,7 @@ import { getWatchDetail } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
@@ -86,6 +86,11 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
                 {watch.return_date ? 'Outbound: ' : 'Best: '}
                 {formatItineraryLine(latest)}
                 {watch.return_date ? ' · return not priced separately' : ''}
+              </p>
+            )}
+            {formatCompetitorLine(latest) && (
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#b45309' }}>
+                Cheaper elsewhere: {formatCompetitorLine(latest)}
               </p>
             )}
             <p style={{ margin: '8px 0 0', fontSize: 12 }}>

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import PriceSparkline from './PriceSparkline'
 
@@ -22,6 +22,7 @@ export default function WatchCard({ watch }: Props) {
   const isRoundTrip = watch.return_date !== null
   const latestCheck = watch.price_history[watch.price_history.length - 1] ?? null
   const itineraryLine = formatItineraryLine(latestCheck)
+  const competitorLine = formatCompetitorLine(latestCheck)
 
   /**
    * The card refreshes the page itself rather than asking its parent to drop
@@ -114,6 +115,13 @@ export default function WatchCard({ watch }: Props) {
         {itineraryLine && (
           <p style={{ margin: '12px 0 0', fontSize: 12, color: '#94a3b8' }}>
             {isRoundTrip ? `Outbound ${itineraryLine} · return not priced separately` : itineraryLine}
+          </p>
+        )}
+
+        {/* Context only — never an alert. See lib/format.ts. */}
+        {competitorLine && (
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#b45309' }}>
+            Cheaper elsewhere: {competitorLine}
           </p>
         )}
       </Link>

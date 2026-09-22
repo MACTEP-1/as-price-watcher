@@ -122,7 +122,13 @@ create table if not exists price_checks (
   airline          text not null default 'AS',
   flight_number    text,
   duration_minutes integer,
-  stops            integer not null default 0
+  stops            integer not null default 0,
+  -- Cheapest fare on ANY airline in the same search, when it beats the
+  -- tracked Alaska fare (migration 004). Free: the provider already fetches
+  -- every carrier and filters to Alaska in our own code. Not used by
+  -- lib/alerts.ts — alerts stay about the Alaska price.
+  competitor_cash_price numeric(10,2),
+  competitor_airline    text
 );
 
 alter table price_checks enable row level security;

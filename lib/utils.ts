@@ -19,4 +19,5 @@ export {
   alertIcon,
   alertLabel,
   formatItineraryLine,
+  formatCompetitorLine,
 } from './format'

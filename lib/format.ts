@@ -147,3 +147,23 @@ export function formatItineraryLine(check: {
     .filter((part): part is string => !!part)
     .join(' · ')
 }
+
+/**
+ * "United has it for $427" — the cheapest fare on any airline in the same
+ * search, when it beat the Alaska fare we track (see migration 004 and
+ * lib/flights/serpapi-provider.ts). Returns '' when there is nothing to
+ * say, which is the common case.
+ *
+ * Context only, never an alert: lib/alerts.ts deliberately ignores these
+ * columns so "price dropped" keeps meaning one thing. The same caveat as
+ * the tracked price applies — this is Google's cheapest, which can be an
+ * agency fare rather than what that airline's own site charges.
+ */
+export function formatCompetitorLine(check: {
+  competitor_cash_price: number | null
+  competitor_airline: string | null
+} | null | undefined): string {
+  if (!check?.competitor_cash_price) return ''
+  const airline = check.competitor_airline ?? 'another airline'
+  return `${airline} has it for ${formatCash(check.competitor_cash_price)}`
+}

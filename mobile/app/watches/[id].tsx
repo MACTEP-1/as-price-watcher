@@ -9,6 +9,7 @@ import {
   formatMiles,
   formatDate,
   formatItineraryLine,
+  formatCompetitorLine,
   pctChange,
   formatPctChange,
   changeColor,
@@ -140,6 +141,12 @@ export default function WatchDetailScreen() {
           </Text>
         )}
 
+        {!!formatCompetitorLine(latest) && (
+          <Text style={styles.competitorLine}>
+            Cheaper elsewhere: {formatCompetitorLine(latest)}
+          </Text>
+        )}
+
         <Pressable
           hitSlop={8}
           onPress={() => Linking.openURL(googleFlightsUrl(watch))}
@@ -231,6 +238,7 @@ const styles = StyleSheet.create({
   route: { fontSize: 22, fontWeight: '700', color: '#0f172a' },
   meta: { fontSize: 13, color: '#64748b', marginTop: 4 },
   itineraryLine: { fontSize: 12, color: '#94a3b8', marginTop: 12 },
+  competitorLine: { fontSize: 12, color: '#b45309', marginTop: 6 },
   linkOut: { fontSize: 13, color: '#0060ac', fontWeight: '600', marginTop: 10 },
   metaCabin: { textTransform: 'capitalize' },
   grid: { marginTop: 18, flexDirection: 'row', gap: 20 },
