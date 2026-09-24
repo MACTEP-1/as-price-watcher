@@ -24,6 +24,20 @@ const TRIP_OPTIONS = [
 
 type TripType = (typeof TRIP_OPTIONS)[number]['value']
 
+/**
+ * Stop limit (migration 006). "Up to 2 stops" exists in the API but isn't
+ * offered: it's barely different from Any on the routes this app watches.
+ * If no Alaska itinerary fits the limit, the watch tracks the cheapest
+ * fitting one on any airline and the card says "no Alaska leg" (user's
+ * choice 09/24, over tracking nothing).
+ */
+const STOP_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'Any' },
+  { value: 0, label: 'Nonstop only' },
+  { value: 1, label: 'Up to 1 stop' },
+]
+
+
 // Same list as the web form's POPULAR_ROUTES (app/watches/new/page.tsx).
 const POPULAR_ROUTES = [
   { o: 'SEA', d: 'LAX', label: 'SEA → LAX' },
@@ -64,6 +78,7 @@ export default function NewWatchScreen() {
     returnDate: '',
     cabinClass: 'economy' as string,
   })
+  const [maxStops, setMaxStops] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -122,6 +137,7 @@ export default function NewWatchScreen() {
         departDate: form.departDate,
         returnDate: isRoundTrip ? form.returnDate : null,
         cabinClass: form.cabinClass,
+        maxStops,
       })
       router.replace(`/watches/${watch.id}`)
     } catch (err) {
@@ -248,6 +264,24 @@ export default function NewWatchScreen() {
             >
               <Text style={[styles.pillText, active && styles.pillTextActive]}>
                 {c.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+
+      <Text style={styles.label}>Stops</Text>
+      <View style={styles.pillRow}>
+        {STOP_OPTIONS.map((o) => {
+          const active = maxStops === o.value
+          return (
+            <Pressable
+              key={String(o.value)}
+              onPress={() => setMaxStops(o.value)}
+              style={[styles.pillFlex, active && styles.pillActive]}
+            >
+              <Text style={[styles.pillText, active && styles.pillTextActive]}>
+                {o.label}
               </Text>
             </Pressable>
           )

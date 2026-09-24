@@ -21,6 +21,9 @@ export interface Itinerary {
   depart_date: string
   return_date: string | null
   cabin_class: CabinClass
+  // Stop limit (migration 006): null = any, 0 = nonstop only, 1 = up to 1
+  // stop, 2 = up to 2 stops. Part of the itinerary's identity.
+  max_stops: number | null
   created_at: string
 }
 
@@ -37,6 +40,16 @@ export interface Watch {
 }
 
 /** A price observation. Belongs to the itinerary, not to any one watcher. */
+/**
+ * One flight in the tracked itinerary (migration 005). `flight` is stored
+ * without the space SerpApi sends ("AS326"); `from`/`to` are IATA codes.
+ */
+export interface FlightLeg {
+  flight: string | null
+  from: string | null
+  to: string | null
+}
+
 export interface PriceCheck {
   id: string
   itinerary_id: string
@@ -54,6 +67,8 @@ export interface PriceCheck {
   // deliberately ignore it (see lib/alerts.ts).
   competitor_cash_price: number | null
   competitor_airline: string | null
+  // Outbound legs in order, or null on rows written before migration 005.
+  legs: FlightLeg[] | null
 }
 
 /**
@@ -91,6 +106,9 @@ export interface WatchWithLatestPrice {
   depart_date: string
   return_date: string | null
   cabin_class: CabinClass
+  // Stop limit (migration 006): null = any, 0 = nonstop only, 1 = up to 1
+  // stop, 2 = up to 2 stops. Part of the itinerary's identity.
+  max_stops: number | null
 
   latest_cash: number | null
   latest_miles: number | null

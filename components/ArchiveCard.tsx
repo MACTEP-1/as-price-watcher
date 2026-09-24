@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate, formatShortDate } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, formatShortDate, formatStopLimit } from '@/lib/utils'
 
 /**
  * Same card shape as WatchCard, deliberately muted (grey route text, no
@@ -53,6 +53,7 @@ export default function ArchiveCard({ watch }: Props) {
                 : ' · one-way'}
               {' · '}
               <span style={{ textTransform: 'capitalize' }}>{watch.cabin_class.replace('_', ' ')}</span>
+              {formatStopLimit(watch.max_stops) && ` · ${formatStopLimit(watch.max_stops)}`}
             </p>
           </div>
           <span

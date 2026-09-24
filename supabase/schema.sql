@@ -41,15 +41,23 @@ create table if not exists itineraries (
   return_date   date,                   -- null = one-way (no trip_type column)
   cabin_class   text not null default 'economy'
                   check (cabin_class in ('economy','premium_economy','business','first')),
+  -- Stop limit (migration 006): null = any, 0 = nonstop only, 1/2 = up to
+  -- that many stops. Part of the identity: a nonstop-only watch and an
+  -- any-stops watch are different searches and must not share history.
+  max_stops     smallint
+                  constraint itineraries_max_stops_check
+                  check (max_stops is null or max_stops between 0 and 2),
   created_at    timestamptz not null default now()
 );
 
 -- A plain UNIQUE would NOT deduplicate one-ways: Postgres treats NULLs as
 -- distinct, so every one-way would insert a fresh row. Collapsing null to
 -- 'infinity' in a functional index fixes that on any PG version.
+-- max_stops folded the same way (null → -1) so two any-stops rows collide.
 create unique index if not exists itineraries_unique_idx
   on itineraries (origin, destination, depart_date,
-                  coalesce(return_date, 'infinity'::date), cabin_class);
+                  coalesce(return_date, 'infinity'::date), cabin_class,
+                  coalesce(max_stops, -1));
 
 alter table itineraries enable row level security;
 
@@ -128,7 +136,11 @@ create table if not exists price_checks (
   -- every carrier and filters to Alaska in our own code. Not used by
   -- lib/alerts.ts — alerts stay about the Alaska price.
   competitor_cash_price numeric(10,2),
-  competitor_airline    text
+  competitor_airline    text,
+  -- Every OUTBOUND leg of the tracked itinerary, in order (migration 005):
+  -- [{"flight": "LO412", "from": "ZRH", "to": "WAW"}, ...]. Lets the UI show
+  -- which leg is Alaska on multi-carrier routings. Null on older rows.
+  legs                  jsonb
 );
 
 alter table price_checks enable row level security;
@@ -187,7 +199,8 @@ create or replace function find_or_create_itinerary(
   p_destination text,
   p_depart_date date,
   p_return_date date,
-  p_cabin_class text
+  p_cabin_class text,
+  p_max_stops   integer default null
 ) returns uuid
 language plpgsql
 security definer
@@ -201,14 +214,15 @@ begin
      and destination = p_destination
      and depart_date = p_depart_date
      and coalesce(return_date, 'infinity'::date) = coalesce(p_return_date, 'infinity'::date)
-     and cabin_class = p_cabin_class;
+     and cabin_class = p_cabin_class
+     and coalesce(max_stops, -1) = coalesce(p_max_stops, -1);
 
   if v_id is not null then
     return v_id;
   end if;
 
-  insert into itineraries (origin, destination, depart_date, return_date, cabin_class)
-  values (p_origin, p_destination, p_depart_date, p_return_date, p_cabin_class)
+  insert into itineraries (origin, destination, depart_date, return_date, cabin_class, max_stops)
+  values (p_origin, p_destination, p_depart_date, p_return_date, p_cabin_class, p_max_stops)
   returning id into v_id;
 
   return v_id;
@@ -219,13 +233,18 @@ exception when unique_violation then
      and destination = p_destination
      and depart_date = p_depart_date
      and coalesce(return_date, 'infinity'::date) = coalesce(p_return_date, 'infinity'::date)
-     and cabin_class = p_cabin_class;
+     and cabin_class = p_cabin_class
+     and coalesce(max_stops, -1) = coalesce(p_max_stops, -1);
   return v_id;
 end;
 $$;
 
-revoke all on function find_or_create_itinerary(text,text,date,date,text) from public;
-grant execute on function find_or_create_itinerary(text,text,date,date,text) to authenticated;
+-- Revoke from anon EXPLICITLY, not just public: Supabase grants EXECUTE on
+-- new functions to anon/authenticated/service_role directly, so revoking
+-- from public alone left logged-out callers able to run this SECURITY
+-- DEFINER function (found live 2026-09-24, fixed in migration 006).
+revoke all on function find_or_create_itinerary(text,text,date,date,text,integer) from public, anon;
+grant execute on function find_or_create_itinerary(text,text,date,date,text,integer) to authenticated, service_role;
 
 -- ─────────────────────────────────────────────
 -- Indexes

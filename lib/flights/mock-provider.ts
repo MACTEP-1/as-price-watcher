@@ -70,7 +70,9 @@ export class MockFlightPriceProvider implements FlightPriceProvider {
     const durationMinutes = Math.round(baseDuration * (0.95 + durationVariance * 0.15))
 
     const stopsRand = seededRandom(seed + 'stops')
-    const stops = baseDuration > 240 && stopsRand > 0.7 ? 1 : 0
+    // Honour a nonstop-only limit so UI work against the mock matches what
+    // the real provider would return.
+    const stops = params.maxStops === 0 ? 0 : baseDuration > 240 && stopsRand > 0.7 ? 1 : 0
 
     const fnIndex = Math.floor(seededRandom(seed + 'fn') * AS_FLIGHT_NUMBERS.length)
     const flightNumber = AS_FLIGHT_NUMBERS[fnIndex]
@@ -87,6 +89,20 @@ export class MockFlightPriceProvider implements FlightPriceProvider {
       stops,
       competitorCashPrice: hasRival ? Math.round((cashPrice * 0.75) / 5) * 5 : null,
       competitorAirline: hasRival ? 'United' : null,
+      // Nonstop fakes get one leg; one-stop fakes get a plausible SEA
+      // connection with the Alaska leg second, so UI work exercises the
+      // multi-carrier "Alaska flies X-Y" suffix.
+      legs:
+        stops === 0
+          ? [{ flight: flightNumber, from: params.origin, to: params.destination }]
+          : (() => {
+              const hub =
+                params.origin === 'SEA' || params.destination === 'SEA' ? 'PDX' : 'SEA'
+              return [
+                { flight: 'DL1234', from: params.origin, to: hub },
+                { flight: flightNumber, from: hub, to: params.destination },
+              ]
+            })(),
     }
   }
 }

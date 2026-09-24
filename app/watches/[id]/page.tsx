@@ -5,7 +5,7 @@ import { getWatchDetail } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine, formatStopLimit, milesScope } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
@@ -62,6 +62,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
               : ' · one-way'}
             {' · '}
             <span style={{ textTransform: 'capitalize' }}>{watch.cabin_class.replace('_', ' ')}</span>
+            {formatStopLimit(watch.max_stops) && ` · ${formatStopLimit(watch.max_stops)}`}
           </p>
         </div>
 
@@ -111,7 +112,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
                 even for a round trip, while the cash card beside this one
                 shows the round-trip total. */}
             <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              {watch.return_date ? 'Miles price · one-way' : 'Miles price'}
+              {`Miles price${milesScope(watch)}`}
             </p>
             <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: (latest?.miles_price ?? null) !== null ? '#00a551' : '#94a3b8' }}>{formatMiles(latest?.miles_price ?? null)}</p>
             {milesChange !== null && (

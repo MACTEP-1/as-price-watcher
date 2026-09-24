@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { getWatchesWithPrices } from '../../lib/watches'
 import type { WatchWithLatestPrice } from '../../types'
-import { formatCash, formatMiles, formatDate, formatShortDate } from '../../lib/format'
+import { formatCash, formatMiles, formatDate, formatShortDate, formatStopLimit } from '../../lib/format'
 import SeatsAeroCredit from '../components/SeatsAeroCredit'
 
 /**
@@ -134,6 +134,7 @@ export default function ArchiveScreen() {
                 <Text style={styles.metaCabin}>
                   {item.cabin_class.replace('_', ' ')}
                 </Text>
+                {formatStopLimit(item.max_stops) ? ` · ${formatStopLimit(item.max_stops)}` : ''}
               </Text>
 
               <View style={styles.grid}>

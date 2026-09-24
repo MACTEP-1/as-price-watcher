@@ -18,6 +18,20 @@ const TRIP_OPTIONS = [
 
 type TripType = (typeof TRIP_OPTIONS)[number]['value']
 
+/**
+ * Stop limit (migration 006). "Up to 2 stops" exists in the API but isn't
+ * offered: it's barely different from Any on the routes this app watches.
+ * If no Alaska itinerary fits the limit, the watch tracks the cheapest
+ * fitting one on any airline and the card says "no Alaska leg" (user's
+ * choice 09/24, over tracking nothing).
+ */
+const STOP_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'Any' },
+  { value: 0, label: 'Nonstop only' },
+  { value: 1, label: 'Up to 1 stop' },
+]
+
+
 const POPULAR_ROUTES = [
   { o: 'SEA', d: 'LAX', label: 'SEA → LAX' },
   { o: 'SEA', d: 'SFO', label: 'SEA → SFO' },
@@ -57,6 +71,7 @@ export default function NewWatchPage() {
   const [form, setForm] = useState({
     origin: '', destination: '', departDate: '', returnDate: '', cabinClass: 'economy',
   })
+  const [maxStops, setMaxStops] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -99,6 +114,7 @@ export default function NewWatchPage() {
         departDate: form.departDate,
         returnDate: tripType === 'round_trip' ? form.returnDate : null,
         cabinClass: form.cabinClass,
+        maxStops,
       }),
     })
     const data = await res.json()
@@ -210,6 +226,22 @@ export default function NewWatchPage() {
                   style={{ ...pill(form.cabinClass === c.value), flex: 1, padding: '8px 4px', fontSize: 12 }}
                 >
                   {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Stops</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {STOP_OPTIONS.map((o) => (
+                <button
+                  key={String(o.value)}
+                  type="button"
+                  onClick={() => setMaxStops(o.value)}
+                  style={{ ...pill(maxStops === o.value), flex: 1, padding: '8px 4px', fontSize: 12 }}
+                >
+                  {o.label}
                 </button>
               ))}
             </div>

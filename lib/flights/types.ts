@@ -1,4 +1,4 @@
-import type { CabinClass } from '@/types'
+import type { CabinClass, FlightLeg } from '@/types'
 
 export interface FlightSearchParams {
   origin: string
@@ -7,6 +7,8 @@ export interface FlightSearchParams {
   returnDate?: string | null
   cabinClass: CabinClass
   adults?: number
+  /** null/undefined = any; 0 = nonstop only; 1 = up to 1 stop; 2 = up to 2. */
+  maxStops?: number | null
 }
 
 export interface CashFareResult {
@@ -22,6 +24,12 @@ export interface CashFareResult {
    */
   competitorCashPrice: number | null
   competitorAirline: string | null
+  /**
+   * Every outbound leg of the tracked itinerary, in order. flightNumber
+   * above stays the FIRST leg for existing readers; this is what shows
+   * which leg is actually Alaska on a multi-carrier routing.
+   */
+  legs: FlightLeg[]
 }
 
 /**

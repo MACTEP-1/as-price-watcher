@@ -62,6 +62,10 @@ export class DuffelFlightProvider implements FlightPriceProvider {
       // does. Always null rather than pretending Alaska is cheapest.
       competitorCashPrice: null,
       competitorAirline: null,
+      // Not mapped: this provider is unused (see
+      // docs/price-provider-decisions.md) and its segment shape was never
+      // verified against live data. The UI falls back to flightNumber.
+      legs: [],
     }
   }
 }

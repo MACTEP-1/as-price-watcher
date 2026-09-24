@@ -62,6 +62,8 @@ export async function createWatch(params: {
   departDate: string
   returnDate: string | null
   cabinClass: string
+  /** null = any; 0 nonstop only; 1/2 = up to that many stops (migration 006). */
+  maxStops?: number | null
 }): Promise<{ id: string }> {
   const {
     data: { session },

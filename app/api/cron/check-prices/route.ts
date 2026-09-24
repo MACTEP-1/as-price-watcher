@@ -25,6 +25,7 @@ import { getCheapestMilesPrice } from '@/lib/miles'
 import { evaluateAlerts } from '@/lib/alerts'
 import { sendAlertEmail, sendCronFailureEmail } from '@/lib/email'
 import { mapWithConcurrency } from '@/lib/concurrency'
+import { priceCheckRow } from '@/lib/price-check-row'
 import type { PriceCheck, Itinerary } from '@/types'
 
 export const runtime = 'nodejs'
@@ -240,6 +241,7 @@ async function runPriceCheck(): Promise<NextResponse> {
           departDate: itinerary.depart_date,
           returnDate: itinerary.return_date,
           cabinClass: itinerary.cabin_class,
+          maxStops: itinerary.max_stops,
         }),
         getCheapestMilesPrice({
           origin: itinerary.origin,
@@ -260,18 +262,11 @@ async function runPriceCheck(): Promise<NextResponse> {
       }
 
       // ── Store ───────────────────────────────────────────────────────
-      const { error: insertError } = await supabase.from('price_checks').insert({
-        itinerary_id: itineraryId,
-        cash_price: cash?.cashPrice ?? null,
-        cash_currency: cash?.currency ?? 'USD',
-        miles_price: miles?.milesPrice ?? null,
-        airline: 'AS',
-        flight_number: cash?.flightNumber ?? null,
-        duration_minutes: cash?.durationMinutes ?? null,
-        stops: cash?.stops ?? 0,
-        competitor_cash_price: cash?.competitorCashPrice ?? null,
-        competitor_airline: cash?.competitorAirline ?? null,
-      })
+      // Row shape lives in lib/price-check-row.ts, shared with watch
+      // creation — the two inserts drifted apart once already.
+      const { error: insertError } = await supabase
+        .from('price_checks')
+        .insert(priceCheckRow(itineraryId, cash, miles))
 
       if (insertError) {
         console.error(`[cron] Insert error for itinerary ${itineraryId}:`, insertError)

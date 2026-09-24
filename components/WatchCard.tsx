@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine, formatStopLimit, milesScope } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import PriceSparkline from './PriceSparkline'
 
@@ -66,6 +66,7 @@ export default function WatchCard({ watch }: Props) {
                 : ' · one-way'}
               {' · '}
               <span style={{ textTransform: 'capitalize' }}>{watch.cabin_class.replace('_', ' ')}</span>
+              {formatStopLimit(watch.max_stops) && ` · ${formatStopLimit(watch.max_stops)}`}
             </p>
           </div>
           <span style={{ fontSize: 14, color: '#94a3b8', flexShrink: 0 }}>›</span>
@@ -96,7 +97,7 @@ export default function WatchCard({ watch }: Props) {
                 it IS the round-trip total — the two sat side by side reading as
                 comparable until 2026-09-22. */}
             <p style={{ margin: '0 0 2px', fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Miles{isRoundTrip ? ' · one-way' : ''}
+              Miles{milesScope(watch)}
             </p>
             <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: watch.latest_miles !== null ? '#00a551' : '#94a3b8' }}>{formatMiles(watch.latest_miles)}</p>
             {milesChange !== null && (

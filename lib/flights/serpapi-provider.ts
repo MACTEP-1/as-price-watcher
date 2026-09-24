@@ -122,6 +122,14 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
 
     if (params.returnDate) query.set('return_date', params.returnDate)
 
+    // SerpApi's `stops`: 0 = any (its default), 1 = nonstop only, 2 = 1 stop
+    // or fewer, 3 = 2 stops or fewer — i.e. our max_stops + 1. Filtering
+    // happens inside the same single search, so a stop limit costs no extra
+    // quota. If no Alaska itinerary fits the limit, the fallback below picks
+    // the cheapest fitting itinerary on any airline (user's choice, 09/24);
+    // the card then says "no Alaska leg" (lib/format.ts).
+    if (params.maxStops != null) query.set('stops', String(params.maxStops + 1))
+
     // Keep the request inside the cron's 30s budget.
     //
     // This was 20s, which did NOT achieve that: cron-job.org's timeout is a
@@ -219,6 +227,14 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
       stops,
       competitorCashPrice: hasCheaperRival ? cheapestOverall.price! : null,
       competitorAirline: hasCheaperRival ? airlineNameOf(cheapestOverall) : null,
+      // All legs, not just the first: on ZRH->SEA the tracked "Alaska
+      // itinerary" started with Icelandair/LOT and only a later leg was AS,
+      // so the first flight number alone misdescribed it (migration 005).
+      legs: legs.map((leg) => ({
+        flight: leg.flight_number?.replace(/\s+/g, '') ?? null,
+        from: leg.departure_airport?.id ?? null,
+        to: leg.arrival_airport?.id ?? null,
+      })),
     }
   }
 }

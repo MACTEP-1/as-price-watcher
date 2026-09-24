@@ -26,6 +26,8 @@ import {
   formatDate,
   formatItineraryLine,
   formatCompetitorLine,
+  formatStopLimit,
+  milesScope,
   pctChange,
   formatPctChange,
   changeColor,
@@ -145,6 +147,7 @@ export default function DashboardScreen() {
                   <Text style={styles.metaCabin}>
                     {item.cabin_class.replace('_', ' ')}
                   </Text>
+                  {formatStopLimit(item.max_stops) ? ` · ${formatStopLimit(item.max_stops)}` : ''}
                 </Text>
 
                 <View style={styles.grid}>
@@ -179,7 +182,7 @@ export default function DashboardScreen() {
                         see components/WatchCard.tsx (web) and
                         lib/miles/seats-aero-provider.ts. */}
                     <Text style={styles.microLabel}>
-                      {isRoundTrip ? 'Miles · one-way' : 'Miles'}
+                      {`Miles${milesScope(item)}`}
                     </Text>
                     <Text
                       style={[

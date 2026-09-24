@@ -19,6 +19,8 @@ import {
   formatDate,
   formatItineraryLine,
   formatCompetitorLine,
+  formatStopLimit,
+  milesScope,
   pctChange,
   formatPctChange,
   changeColor,
@@ -145,6 +147,7 @@ export default function WatchDetailScreen() {
           {watch.return_date ? ` – ${formatDate(watch.return_date)}` : ' · one-way'}
           {' · '}
           <Text style={styles.metaCabin}>{watch.cabin_class.replace('_', ' ')}</Text>
+          {formatStopLimit(watch.max_stops) ? ` · ${formatStopLimit(watch.max_stops)}` : ''}
         </Text>
 
         <View style={styles.grid}>
@@ -167,7 +170,7 @@ export default function WatchDetailScreen() {
             {/* One-way award even on a round trip — see the web detail page
                 and lib/miles/seats-aero-provider.ts. */}
             <Text style={styles.microLabel}>
-              {watch.return_date ? 'Miles · one-way' : 'Miles'}
+              {`Miles${milesScope(watch)}`}
             </Text>
             <Text
               style={[styles.miles, watch.latest_miles === null && styles.priceMuted]}

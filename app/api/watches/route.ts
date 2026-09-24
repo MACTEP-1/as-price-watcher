@@ -3,6 +3,7 @@ import { createSupabaseRouteClient, createSupabaseServiceClient } from '@/lib/su
 import { getWatchesWithPrices } from '@/lib/watches'
 import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice } from '@/lib/miles'
+import { priceCheckRow } from '@/lib/price-check-row'
 import type { CabinClass } from '@/types'
 
 export async function GET() {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { origin, destination, departDate, returnDate, cabinClass } = body
+  const { origin, destination, departDate, returnDate, cabinClass, maxStops } = body
 
   if (!origin || !destination || !departDate) {
     return NextResponse.json({ error: 'origin, destination, and departDate are required' }, { status: 400 })
@@ -56,6 +57,20 @@ export async function POST(req: NextRequest) {
   }
 
   /**
+   * Stop limit (migration 006): absent/null = any, else 0 (nonstop only),
+   * 1 or 2. Part of the itinerary's identity, so it's validated here and
+   * again by the itineraries_max_stops_check constraint.
+   */
+  const normalisedMaxStops: number | null =
+    maxStops === undefined || maxStops === null ? null : maxStops
+  if (normalisedMaxStops !== null && ![0, 1, 2].includes(normalisedMaxStops)) {
+    return NextResponse.json(
+      { error: 'maxStops must be 0 (nonstop), 1, 2, or omitted for any' },
+      { status: 400 }
+    )
+  }
+
+  /**
    * Find-or-create the itinerary. This is a SECURITY DEFINER function rather
    * than a direct insert: granting users INSERT on `itineraries` would let
    * anyone write arbitrary rows into a table shared by every user. The
@@ -70,6 +85,7 @@ export async function POST(req: NextRequest) {
       p_depart_date: departDate,
       p_return_date: normalisedReturn,
       p_cabin_class: cabinClass ?? 'economy',
+      p_max_stops: normalisedMaxStops,
     }
   )
 
@@ -137,6 +153,7 @@ export async function POST(req: NextRequest) {
           departDate,
           returnDate: normalisedReturn,
           cabinClass: (cabinClass ?? 'economy') as CabinClass,
+          maxStops: normalisedMaxStops,
         }),
         getCheapestMilesPrice({
           origin,
@@ -150,18 +167,12 @@ export async function POST(req: NextRequest) {
       const miles = milesResult.status === 'fulfilled' ? milesResult.value : null
 
       const serviceClient = createSupabaseServiceClient()
+      // Same row builder as the cron (lib/price-check-row.ts). This insert
+      // used to be hand-written separately and missed the competitor
+      // columns added in 56818d0 — every new watch's first check lacked them.
       const { error: checkInsertError } = await serviceClient
         .from('price_checks')
-        .insert({
-          itinerary_id: itineraryId,
-          cash_price: cash?.cashPrice ?? null,
-          cash_currency: cash?.currency ?? 'USD',
-          miles_price: miles?.milesPrice ?? null,
-          airline: 'AS',
-          flight_number: cash?.flightNumber ?? null,
-          duration_minutes: cash?.durationMinutes ?? null,
-          stops: cash?.stops ?? 0,
-        })
+        .insert(priceCheckRow(itineraryId, cash, miles))
 
       if (checkInsertError) {
         console.error('[watches] immediate price check insert failed:', checkInsertError)

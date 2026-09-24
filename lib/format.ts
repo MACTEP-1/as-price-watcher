@@ -137,15 +137,55 @@ export function formatItineraryLine(check: {
   flight_number: string | null
   stops: number | null
   duration_minutes: number | null
+  legs?: { flight: string | null; from: string | null; to: string | null }[] | null
 } | null | undefined): string {
   if (!check) return ''
   return [
-    formatFlightNumber(check.flight_number),
+    formatRouting(check.legs) ?? formatFlightNumber(check.flight_number),
     formatStops(check.stops),
     formatDuration(check.duration_minutes),
+    formatAlaskaLegs(check.legs),
   ]
     .filter((part): part is string => !!part)
     .join(' · ')
+}
+
+const isAlaskaLeg = (flight: string | null) => !!flight && /^AS\s*\d/i.test(flight)
+
+/**
+ * "LO 412 → LO 3 → AS 6 (ZRH–WAW–ORD–SEA)", or "AS 326 (SEA–TPA)" for a
+ * nonstop. Null when legs weren't recorded (rows before migration 005), so
+ * the caller falls back to the first flight number alone.
+ */
+function formatRouting(
+  legs: { flight: string | null; from: string | null; to: string | null }[] | null | undefined
+): string | null {
+  if (!legs?.length) return null
+  const flights = legs.map((l) => formatFlightNumber(l.flight) ?? '?').join(' → ')
+  const airports = [legs[0].from, ...legs.map((l) => l.to)]
+  return airports.every(Boolean) ? `${flights} (${airports.join('–')})` : flights
+}
+
+/**
+ * Says which leg Alaska actually flies, when that isn't obvious — i.e. on a
+ * multi-carrier routing. "Alaska itinerary" in the provider means ANY
+ * itinerary with some Alaska leg (lib/flights/serpapi-provider.ts), and on
+ * ZRH→SEA/GVA→SEA the first leg was Icelandair, LOT, SAS or TAP (09/23–24),
+ * so without this the card read as "tracking Icelandair".
+ *
+ * - every leg Alaska (the common domestic case): nothing to add
+ * - some legs Alaska: "Alaska flies ORD–SEA" (each Alaska leg)
+ * - no Alaska leg at all: "no Alaska leg" — the provider's fallback when a
+ *   route has no Alaska itinerary; worth saying out loud on an Alaska app
+ */
+function formatAlaskaLegs(
+  legs: { flight: string | null; from: string | null; to: string | null }[] | null | undefined
+): string | null {
+  if (!legs?.length) return null
+  const alaska = legs.filter((l) => isAlaskaLeg(l.flight))
+  if (alaska.length === legs.length) return null
+  if (alaska.length === 0) return 'no Alaska leg'
+  return `Alaska flies ${alaska.map((l) => `${l.from ?? '?'}–${l.to ?? '?'}`).join(', ')}`
 }
 
 /**
@@ -166,4 +206,37 @@ export function formatCompetitorLine(check: {
   if (!check?.competitor_cash_price) return ''
   const airline = check.competitor_airline ?? 'another airline'
   return `${airline} has it for ${formatCash(check.competitor_cash_price)}`
+}
+
+/**
+ * A watch's stop limit as shown next to the cabin: "nonstop only",
+ * "up to 1 stop", "up to 2 stops" — or null for the default (any), which
+ * isn't worth printing. See migration 006.
+ */
+export function formatStopLimit(maxStops: number | null | undefined): string | null {
+  if (maxStops == null) return null
+  if (maxStops === 0) return 'nonstop only'
+  return maxStops === 1 ? 'up to 1 stop' : `up to ${maxStops} stops`
+}
+
+/**
+ * What the MILES figure actually covers, as a label suffix: " · one-way",
+ * " · any stops", " · one-way · any stops", or "".
+ *
+ * - one-way: seats.aero is only ever asked about origin→destination on the
+ *   depart date, even for a round trip (see 036f772)
+ * - any stops: the stop limit filters the CASH search only. seats.aero
+ *   records carry a per-cabin "direct available" flag (YDirect, JDirect…),
+ *   but its docs don't say whether the record's mileage cost is the direct
+ *   one — filtering on it could label a connection's price as nonstop.
+ *   Honest label now; filter once a real record has been inspected.
+ */
+export function milesScope(watch: {
+  return_date: string | null
+  max_stops?: number | null
+}): string {
+  const parts: string[] = []
+  if (watch.return_date) parts.push('one-way')
+  if (watch.max_stops != null) parts.push('any stops')
+  return parts.map((p) => ` · ${p}`).join('')
 }
