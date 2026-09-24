@@ -19,6 +19,7 @@
     "../lib/watches.ts",
     "../lib/format.ts",
     "../lib/airports.ts",
+    "../lib/airports-data.ts",
     "../lib/booking.ts"
   ]
 }
