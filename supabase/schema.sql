@@ -1,15 +1,29 @@
--- AS Price Watcher — Supabase schema (canonical, post-migration 001)
+-- AS Price Watcher — Supabase schema (canonical, current through migration 007)
 --
 -- For a FRESH database, run this file.
--- For an EXISTING one, run supabase/migrations/001_itineraries_and_status.sql
+-- For an EXISTING one, run the files in supabase/migrations/ in order
 -- instead — this file describes the destination, not the path.
 --
 -- ─────────────────────────────────────────────────────────────────────────
 -- SECURITY MODEL — read before adding policies
 -- ─────────────────────────────────────────────────────────────────────────
 -- The anon key is PUBLIC. It ships in the browser bundle, so anyone can call
--- Supabase's REST API directly with it. RLS policies are therefore the ONLY
--- boundary protecting this data — not the app, not the API routes.
+-- Supabase's REST API directly with it. So the database itself is the
+-- boundary protecting this data — not the app, not the API routes. It has
+-- two layers (since migration 007, 2026-10-20):
+--   1. GRANTS decide which OPERATIONS a role can attempt at all. anon
+--      (logged out) has none; authenticated has exactly what the app uses
+--      (see GRANTS at the bottom). Everything else is refused before RLS
+--      is even consulted.
+--   2. RLS policies decide WHICH ROWS a permitted operation can touch.
+-- A mistake in one layer is caught by the other. Before migration 007 every
+-- API role held every privilege and RLS was the only layer.
+--
+-- NEW TABLES AND FUNCTIONS GET NO ACCESS BY DEFAULT. Default privileges for
+-- objects created by `postgres` were revoked in 007 (and Supabase stops
+-- auto-granting new tables anyway from 2026-10-30). Every migration that
+-- creates a table, view or function must grant exactly what the app needs
+-- — and only service_role gets anything automatically.
 --
 -- The service_role key (used by the cron) BYPASSES RLS entirely. Writes
 -- performed by the cron need NO insert policy. If you find yourself adding a
@@ -27,6 +41,18 @@
 -- ─────────────────────────────────────────────────────────────────────────
 
 create extension if not exists "uuid-ossp";
+
+-- Default privileges first, so nothing created below is ever auto-granted
+-- to the API roles. (EXECUTE-to-PUBLIC is Postgres's own built-in default
+-- and can only be removed globally, not per schema.)
+alter default privileges for role postgres in schema public
+  revoke all on tables from anon, authenticated;
+alter default privileges for role postgres in schema public
+  revoke all on sequences from anon, authenticated;
+alter default privileges for role postgres in schema public
+  revoke all on functions from anon, authenticated;
+alter default privileges for role postgres
+  revoke execute on functions from public;
 
 -- ─────────────────────────────────────────────
 -- Itineraries — a priceable journey, independent of who watches it
@@ -61,16 +87,9 @@ create unique index if not exists itineraries_unique_idx
 
 alter table itineraries enable row level security;
 
-drop policy if exists "Users can read itineraries they watch" on itineraries;
-create policy "Users can read itineraries they watch"
-  on itineraries for select
-  using (
-    exists (
-      select 1 from watches w
-      where w.itinerary_id = itineraries.id
-        and w.user_id = auth.uid()
-    )
-  );
+-- Its read policy is created after the watches table below — it refers to
+-- watches, and Postgres rejects a policy naming a table that doesn't exist
+-- yet (this file failed on a fresh database until 2026-10-20).
 
 -- ─────────────────────────────────────────────
 -- Watches — one user's subscription to an itinerary
@@ -96,6 +115,17 @@ create policy "Users can manage their own watches"
   on watches for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+drop policy if exists "Users can read itineraries they watch" on itineraries;
+create policy "Users can read itineraries they watch"
+  on itineraries for select
+  using (
+    exists (
+      select 1 from watches w
+      where w.itinerary_id = itineraries.id
+        and w.user_id = auth.uid()
+    )
+  );
 
 -- Keeps status_changed_at correct regardless of which code path changes
 -- status (soft-delete, unsubscribe, the cron's expiry path, or anything
@@ -272,3 +302,24 @@ create or replace view latest_prices
     checked_at
   from price_checks
   order by itinerary_id, checked_at desc;
+
+-- ─────────────────────────────────────────────
+-- GRANTS — layer 1 of the security model (see top)
+-- ─────────────────────────────────────────────
+-- Exactly what the app uses, from an audit of every .from()/.rpc() in web
+-- and mobile (migration 007's header has the list). Logged-in users read
+-- their data and create/remove watches; removal is a status UPDATE, so
+-- there is deliberately no DELETE. Every write to price_checks and alerts
+-- uses service_role. latest_prices is unused by the app, so no API access.
+-- Explicit revokes too, because Supabase-provisioned projects may still
+-- hold the old broad grants from before these defaults were changed.
+revoke all on table itineraries, watches, price_checks, alerts, latest_prices
+  from anon, authenticated;
+grant select on table itineraries, price_checks, alerts to authenticated;
+grant select, insert, update on table watches to authenticated;
+grant all on table itineraries, watches, price_checks, alerts, latest_prices
+  to service_role;
+
+-- Trigger function: fires regardless of the caller's EXECUTE privilege
+-- (checked only when the trigger is created), so nobody needs to call it.
+revoke all on function set_watch_status_changed_at() from public, anon, authenticated;
