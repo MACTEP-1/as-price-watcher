@@ -1,4 +1,4 @@
--- AS Price Watcher — Supabase schema (canonical, current through migration 007)
+-- AS Price Watcher — Supabase schema (canonical, current through migration 008)
 --
 -- For a FRESH database, run this file.
 -- For an EXISTING one, run the files in supabase/migrations/ in order
@@ -132,6 +132,7 @@ create policy "Users can read itineraries they watch"
 -- added later) — see migration 003's header comment.
 create or replace function set_watch_status_changed_at() returns trigger
 language plpgsql
+set search_path = ''  -- migration 008; body needs only NEW/OLD and now()
 as $$
 begin
   if new.status is distinct from old.status then
