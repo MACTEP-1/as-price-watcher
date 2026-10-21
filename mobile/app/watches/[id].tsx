@@ -29,6 +29,7 @@ import {
 } from '../../../lib/format'
 import { googleFlightsUrl } from '../../../lib/booking'
 import SeatsAeroCredit from '../../components/SeatsAeroCredit'
+import PriceHistoryChart from '../../components/PriceHistoryChart'
 
 export default function WatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -219,25 +220,12 @@ export default function WatchDetailScreen() {
         Price history ({checks.length} check{checks.length !== 1 ? 's' : ''})
       </Text>
 
-      <View style={styles.historyCard}>
-        {checks
-          .slice()
-          .reverse()
-          .map((c, i, arr) => (
-            <View
-              key={c.id}
-              style={[styles.row, i === arr.length - 1 && styles.rowLast]}
-            >
-              <Text style={styles.rowDate}>
-                {new Date(c.checked_at).toLocaleDateString()}
-              </Text>
-              <View style={styles.rowPriceWrap}>
-                <Text style={styles.rowCash}>
-                  {c.cash_price != null ? `$${c.cash_price}` : '—'}
-                </Text>
-              </View>
-            </View>
-          ))}
+      {/* A chart, as on web (app/watches/[id]/page.tsx), replacing the
+          list of rows this screen used to show — touching the chart gives
+          any single check's exact cash and miles, which the list (cash
+          only) never did. */}
+      <View style={[styles.historyCard, styles.chartCard]}>
+        <PriceHistoryChart history={checks} />
       </View>
 
       {/* Real alerts only — mirrors app/watches/[id]/page.tsx on web. This
@@ -432,19 +420,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     boxShadow: '0 4px 12px rgba(15,23,42,0.18)',
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 13,
-    paddingHorizontal: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
+  chartCard: { paddingVertical: 14, paddingHorizontal: 10 },
   rowLast: { borderBottomWidth: 0 },
-  rowDate: { color: '#64748b', fontSize: 13 },
-  rowPriceWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowCash: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
   alertRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
