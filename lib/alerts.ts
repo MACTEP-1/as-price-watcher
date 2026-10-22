@@ -9,7 +9,9 @@
  *      actually fires, unlike 1 and 2                                   ("cumulative_drop")
  *
  * (1) is additionally skipped when it would just repeat a price the user
- * was told about in the last week — see REPEAT_GATE_DAYS.
+ * was told about in the last week — see REPEAT_GATE_DAYS — and when the
+ * "drop" only brings the price back to its usual level after a spike — see
+ * typicalPrice below.
  *
  * Only one alert per watch per 24h to avoid spam (throttled by the caller).
  *
@@ -150,6 +152,34 @@ const MIN_WINDOW = Math.max(1, parseInt(process.env.ALERT_MIN_WINDOW ?? '5', 10)
  */
 const REPEAT_GATE_DAYS = 7
 
+/**
+ * The middle value of every earlier check — this route's usual price.
+ *
+ * Why (2026-10-22): a drop_10pct is measured against the last 7 days, so a
+ * week of unusually HIGH prices makes an ordinary price look like news.
+ * Real case: SEA→TPA sat at $665–680 for weeks, spiked to $852–908 for six
+ * days, then returned to $678 on 10/14 — "📉 Price dropped 17%", true
+ * against the week, but $678 was simply the normal fare again. So a
+ * drop_10pct must ALSO be at or below the median of all earlier checks.
+ * The median, not the mean, so the spike itself can't drag "usual" up.
+ *
+ * Chosen by replaying every real price series through the actual cron flow
+ * (throttle and repeat gate included; it reproduced production's real
+ * alerts exactly) against three candidates. This one removed only the
+ * 10/14 alert. Requiring a drop to hold for two checks instead silenced
+ * both GVA→SEA one-day dips (a Business fare ~40% under its usual price)
+ * and merely delayed 10/14 by a day; a 7-day median instead of mean
+ * changed nothing for 10/14. new_low and cumulative_drop are unaffected:
+ * a new low is below every earlier price by definition, and
+ * cumulative_drop is anchored to what the user was actually told.
+ */
+function typicalPrice(prices: number[]): number | null {
+  if (prices.length === 0) return null
+  const s = [...prices].sort((a, b) => a - b)
+  const mid = s.length >> 1
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+}
+
 /** Latest must be this far below the last-reported (or watch-start) price. */
 const CUMULATIVE_DROP_THRESHOLD = Math.max(
   0,
@@ -257,17 +287,26 @@ export function evaluateAlerts(
   const alreadyTold = (latestPrice: number, told: number | null | undefined): boolean =>
     reportIsRecent && told != null && !(latestPrice < told * (1 - NEW_LOW_MARGIN))
 
+  // Not just "down on the week" but also no worse than usual — see
+  // typicalPrice for the spike-then-back-to-normal case this filters out.
+  const typicalCash = typicalPrice(allCash)
+  const typicalMiles = typicalPrice(allMiles)
+  const notAboveUsual = (latestPrice: number, usual: number | null): boolean =>
+    usual !== null && latestPrice <= usual
+
   const cashDropped =
     latest.cash_price !== null &&
     avgCash !== null &&
     (avgCash - latest.cash_price) / avgCash >= DROP_THRESHOLD &&
-    !alreadyTold(latest.cash_price, lastReported?.cashPrice)
+    !alreadyTold(latest.cash_price, lastReported?.cashPrice) &&
+    notAboveUsual(latest.cash_price, typicalCash)
 
   const milesDropped =
     latest.miles_price !== null &&
     avgMiles !== null &&
     (avgMiles - latest.miles_price) / avgMiles >= DROP_THRESHOLD &&
-    !alreadyTold(latest.miles_price, lastReported?.milesPrice)
+    !alreadyTold(latest.miles_price, lastReported?.milesPrice) &&
+    notAboveUsual(latest.miles_price, typicalMiles)
 
   if (cashDropped || milesDropped) {
     return {
