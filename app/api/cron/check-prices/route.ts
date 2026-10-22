@@ -32,6 +32,9 @@ import type { PriceCheck, Itinerary } from '@/types'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
+/** Most recent checks fed to evaluateAlerts — a year at one per day. */
+const HISTORY_LIMIT = 365
+
 interface ActiveWatchRow {
   id: string
   user_id: string
@@ -264,12 +267,21 @@ async function runPriceCheck(): Promise<NextResponse> {
       }
 
       // ── Shared history — feeds every watcher's evaluation ───────────
-      const { data: history } = await supabase
+      // NEWEST rows first, then flipped to oldest → newest for
+      // evaluateAlerts. This used to be `ascending … .limit(30)`, which
+      // returns the OLDEST 30 checks: from a watch's 31st check on, the
+      // check just inserted above was cut off and every run re-evaluated
+      // the same stale "latest" price forever. Found 2026-10-22, the day
+      // SEA→TPA reached 31 checks. The cap only bounds the query; at one
+      // check a day it covers a year, so "all-time low" and the
+      // watch-start anchor in lib/alerts.ts still mean what they say.
+      const { data: newestFirst } = await supabase
         .from('price_checks')
         .select('*')
         .eq('itinerary_id', itineraryId)
-        .order('checked_at', { ascending: true })
-        .limit(30)
+        .order('checked_at', { ascending: false })
+        .limit(HISTORY_LIMIT)
+      const history = newestFirst ? [...newestFirst].reverse() : null
 
       if (!history || history.length < 2) {
         return {

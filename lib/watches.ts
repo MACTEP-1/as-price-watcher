@@ -146,14 +146,18 @@ export async function getWatchDetail(
   const itin = oneItinerary(w.itineraries)
   if (!itin) return null
 
+  // Newest `historyLimit` rows, flipped to oldest → newest. Ascending +
+  // limit would return the OLDEST rows instead, so past historyLimit checks
+  // the "latest" price on the detail page would freeze — the same bug the
+  // cron's history query had at 30 (fixed 2026-10-22).
   const { data: checkRows } = await supabase
     .from('price_checks')
     .select('*')
     .eq('itinerary_id', w.itinerary_id)
-    .order('checked_at', { ascending: true })
+    .order('checked_at', { ascending: false })
     .limit(historyLimit)
 
-  const checks = (checkRows ?? []) as PriceCheck[]
+  const checks = ((checkRows ?? []) as PriceCheck[]).reverse()
   const latest = checks[checks.length - 1]
   const prev = checks[checks.length - 2]
 
