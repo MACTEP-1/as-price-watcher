@@ -184,6 +184,10 @@ async function runPriceCheck(): Promise<NextResponse> {
       .select('itinerary_id')
       .in('itinerary_id', Array.from(byItinerary.keys()))
       .gte('checked_at', cutoff)
+      // Our own checks only — a day copied from Google's history
+      // (source 'google_history', migration 011) never means "already
+      // checked", even if it is recent.
+      .eq('source', 'check')
 
     if (recentError) {
       // Non-fatal on purpose. Failing to read this only risks a duplicate

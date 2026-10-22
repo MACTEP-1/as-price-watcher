@@ -92,6 +92,10 @@ export interface PriceCheck {
   // What this price was (migration 010); null before it — those rows are
   // all 'alaska_leg'/'any_airline' in practice.
   fare_scope?: PriceFareScope | null
+  // Migration 011: 'check' = our own daily/creation check; 'google_history'
+  // = a day from Google's price history, copied in when the watch was
+  // created (cash only). See lib/price-check-row.ts googleHistoryRows.
+  source?: 'check' | 'google_history'
 }
 
 /**

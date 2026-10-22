@@ -168,6 +168,18 @@ export function formatReturnNote(
   return check?.fare_scope === 'alaska_only' ? 'return on Alaska' : 'return may be another airline'
 }
 
+/**
+ * "3 checks", or "3 checks + 60 days from Google" for a watch seeded with
+ * Google's price history (migration 011). Counting the copied days as our
+ * own checks would overstate how long we've been watching.
+ */
+export function formatCheckCount(checks: { source?: string | null }[]): string {
+  const own = checks.filter((c) => c.source !== 'google_history').length
+  const google = checks.length - own
+  const base = `${own} check${own === 1 ? '' : 's'}`
+  return google > 0 ? `${base} + ${google} day${google === 1 ? '' : 's'} from Google` : base
+}
+
 const isAlaskaLeg = (flight: string | null) => !!flight && /^AS\s*\d/i.test(flight)
 
 /**

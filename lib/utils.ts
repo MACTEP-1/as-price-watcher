@@ -21,6 +21,7 @@ export {
   formatItineraryLine,
   formatCompetitorLine,
   formatReturnNote,
+  formatCheckCount,
   formatStopLimit,
   milesScope,
 } from './format'

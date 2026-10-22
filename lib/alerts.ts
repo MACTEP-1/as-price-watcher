@@ -250,14 +250,29 @@ export function evaluateAlerts(
   const prevCash = previous[previous.length - 1]?.cash_price ?? null
   const prevMiles = previous[previous.length - 1]?.miles_price ?? null
 
+  // ── Enough history PER METRIC, not just rows in total ─────────────
+  // Since migration 011 a new all-Alaska watch starts with ~60 days of
+  // Google's price history — CASH only. Counting rows, it clears
+  // MIN_CHECKS on day one, which is the point for cash; but miles would
+  // then be judged on one or two real readings — exactly the "new low vs
+  // the one other time we looked" noise MIN_CHECKS exists to stop. So each
+  // metric needs MIN_CHECKS values of its own. Replaying every recorded
+  // series (2026-10-22), this changed exactly one past alert: SEA→YYZ
+  // 09/08 fired "dropped" on MILES after only 6 miles readings (the first
+  // check had none) for a $783 cash fare; it now waits, and the same day's
+  // later check fires the real cash new low ($613) instead. Everything
+  // else replayed identically.
+  const cashReady = allCash.length + (latest.cash_price !== null ? 1 : 0) >= MIN_CHECKS
+  const milesReady = allMiles.length + (latest.miles_price !== null ? 1 : 0) >= MIN_CHECKS
+
   // ── Check: new all-time low, by a margin that is worth an email ────
   const beatsLow = (latestPrice: number | null, low: number | null): boolean =>
     latestPrice !== null &&
     low !== null &&
     latestPrice < low * (1 - NEW_LOW_MARGIN)
 
-  const cashBeatsLow = beatsLow(latest.cash_price, historicLowCash)
-  const milesBeatsLow = beatsLow(latest.miles_price, historicLowMiles)
+  const cashBeatsLow = cashReady && beatsLow(latest.cash_price, historicLowCash)
+  const milesBeatsLow = milesReady && beatsLow(latest.miles_price, historicLowMiles)
 
   if (cashBeatsLow || milesBeatsLow) {
     return {
@@ -295,6 +310,7 @@ export function evaluateAlerts(
     usual !== null && latestPrice <= usual
 
   const cashDropped =
+    cashReady &&
     latest.cash_price !== null &&
     avgCash !== null &&
     (avgCash - latest.cash_price) / avgCash >= DROP_THRESHOLD &&
@@ -302,6 +318,7 @@ export function evaluateAlerts(
     notAboveUsual(latest.cash_price, typicalCash)
 
   const milesDropped =
+    milesReady &&
     latest.miles_price !== null &&
     avgMiles !== null &&
     (avgMiles - latest.miles_price) / avgMiles >= DROP_THRESHOLD &&
@@ -328,15 +345,21 @@ export function evaluateAlerts(
   // for the smooth-decline case this specifically exists to catch.
   const anchorSource: 'last_alert' | 'watch_start' =
     lastReported !== null ? 'last_alert' : 'watch_start'
-  const anchorCash = lastReported?.cashPrice ?? history[0]?.cash_price ?? null
-  const anchorMiles = lastReported?.milesPrice ?? history[0]?.miles_price ?? null
+  // Watch start = our FIRST OWN check, not a day copied from Google's
+  // history (migration 011): the fallback anchor stands for the price the
+  // user saw when they started watching, and they never saw Google's.
+  const watchStart = history.find((c) => c.source !== 'google_history') ?? history[0]
+  const anchorCash = lastReported?.cashPrice ?? watchStart?.cash_price ?? null
+  const anchorMiles = lastReported?.milesPrice ?? watchStart?.miles_price ?? null
 
   const cashCumulativeDropped =
+    cashReady &&
     latest.cash_price !== null &&
     anchorCash !== null &&
     (anchorCash - latest.cash_price) / anchorCash >= CUMULATIVE_DROP_THRESHOLD
 
   const milesCumulativeDropped =
+    milesReady &&
     latest.miles_price !== null &&
     anchorMiles !== null &&
     (anchorMiles - latest.miles_price) / anchorMiles >= CUMULATIVE_DROP_THRESHOLD

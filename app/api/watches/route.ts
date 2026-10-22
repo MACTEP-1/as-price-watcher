@@ -3,7 +3,7 @@ import { createSupabaseRouteClient, createSupabaseServiceClient } from '@/lib/su
 import { getWatchesWithPrices } from '@/lib/watches'
 import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice } from '@/lib/miles'
-import { priceCheckRow } from '@/lib/price-check-row'
+import { priceCheckRow, googleHistoryRows } from '@/lib/price-check-row'
 import type { CabinClass } from '@/types'
 
 export async function GET() {
@@ -181,6 +181,15 @@ export async function POST(req: NextRequest) {
 
       if (checkInsertError) {
         console.error('[watches] immediate price check insert failed:', checkInsertError)
+      }
+
+      // Head start from Google's price history — all-Alaska results only
+      // (see googleHistoryRows). Costs no extra search: it came back with
+      // the check above. A failure here only loses the head start.
+      const seed = googleHistoryRows(itineraryId, cash?.priceHistory)
+      if (!checkInsertError && seed.length > 0) {
+        const { error: seedError } = await serviceClient.from('price_checks').insert(seed)
+        if (seedError) console.error('[watches] price history seed insert failed:', seedError)
       }
     }
   } catch (err) {

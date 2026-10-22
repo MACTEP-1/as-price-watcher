@@ -27,6 +27,7 @@ import {
   formatItineraryLine,
   formatCompetitorLine,
   formatReturnNote,
+  formatCheckCount,
   formatStopLimit,
   milesScope,
   pctChange,
@@ -226,8 +227,7 @@ export default function DashboardScreen() {
 
               <View style={styles.footer}>
                 <Text style={styles.checkCount}>
-                  {item.price_history.length} check
-                  {item.price_history.length !== 1 ? 's' : ''}
+                  {formatCheckCount(item.price_history)}
                 </Text>
                 {/* Nested inside the card's Pressable, so it needs its own
                     hitSlop and must not bubble — onPress on a child Pressable

@@ -29,6 +29,14 @@ export interface CashFareResult {
   /** What cashPrice actually is — stored per row as price_checks.fare_scope. */
   fareScope: PriceFareScope
   /**
+   * Google's daily lowest price for this exact search over roughly the last
+   * 60 days (SerpApi price_insights.price_history), oldest first. Only set
+   * for an all-Alaska result — the one case where it describes the same
+   * thing we track (same filtered search). Unset otherwise: unfiltered, it's
+   * the cheapest fare on ANY airline (~$400 vs ~$680 on SEA→TPA, 10/22).
+   */
+  priceHistory?: { at: string; price: number }[]
+  /**
    * Every outbound leg of the tracked itinerary, in order. flightNumber
    * above stays the FIRST leg for existing readers; this is what shows
    * which leg is actually Alaska on a multi-carrier routing.

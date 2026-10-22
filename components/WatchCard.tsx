@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatStopLimit, milesScope } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatCheckCount, formatStopLimit, milesScope } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import PriceSparkline from './PriceSparkline'
 
@@ -129,7 +129,7 @@ export default function WatchCard({ watch }: Props) {
 
       <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ fontSize: 12, color: '#94a3b8' }}>
-          {watch.price_history.length} check{watch.price_history.length !== 1 ? 's' : ''}
+          {formatCheckCount(watch.price_history)}
         </span>
         {/* Outside the <Link> above — a nested <a> is invalid HTML and React
             will not render it. See lib/booking.ts for why Google and not

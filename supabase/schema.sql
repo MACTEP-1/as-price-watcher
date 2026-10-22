@@ -1,4 +1,4 @@
--- AS Price Watcher — Supabase schema (canonical, current through migration 010)
+-- AS Price Watcher — Supabase schema (canonical, current through migration 011)
 --
 -- For a FRESH database, run this file.
 -- For an EXISTING one, run the files in supabase/migrations/ in order
@@ -184,7 +184,13 @@ create table if not exists price_checks (
   -- 'alaska_leg' on a day no all-Alaska trip existed. Null on older rows.
   fare_scope            text
                   constraint price_checks_fare_scope_check
-                  check (fare_scope is null or fare_scope in ('alaska_only', 'alaska_leg', 'any_airline'))
+                  check (fare_scope is null or fare_scope in ('alaska_only', 'alaska_leg', 'any_airline')),
+  -- Migration 011: 'check' = our own check; 'google_history' = a day of
+  -- Google's price history copied in when an all-Alaska watch is created
+  -- (cash only). See lib/price-check-row.ts googleHistoryRows.
+  source                text not null default 'check'
+                  constraint price_checks_source_check
+                  check (source in ('check', 'google_history'))
 );
 
 alter table price_checks enable row level security;

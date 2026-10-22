@@ -63,6 +63,11 @@ function airlineNameOf(itin: SerpItinerary): string | null {
   return leg?.airline ?? carrierOf(leg) ?? null
 }
 
+interface SearchResult {
+  itineraries: SerpItinerary[]
+  priceHistory: { at: string; price: number }[]
+}
+
 function isAlaska(itin: SerpItinerary): boolean {
   return (itin.flights ?? []).some(
     (leg) => carrierOf(leg) === 'AS' || leg.airline === 'Alaska Airlines'
@@ -104,7 +109,7 @@ function compareItineraries(a: SerpItinerary, b: SerpItinerary): number {
 export class SerpApiFlightProvider implements FlightPriceProvider {
   async getCheapestFare(params: FlightSearchParams): Promise<CashFareResult | null> {
     if (params.fareScope !== 'alaska_only') {
-      const all = await this.search(params)
+      const { itineraries: all } = await this.search(params)
       return all.length ? pickAlaskaLeg(all) : null
     }
 
@@ -125,9 +130,9 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     // different kind of price: one missing day beats a series that quietly
     // mixes "Alaska round trip" with "Alaska there, anyone back".
     if (alaskaOnly.status === 'rejected') throw alaskaOnly.reason
-    const others = unfiltered.status === 'fulfilled' ? unfiltered.value : []
+    const others = unfiltered.status === 'fulfilled' ? unfiltered.value.itineraries : []
 
-    if (alaskaOnly.value.length === 0) {
+    if (alaskaOnly.value.itineraries.length === 0) {
       // No all-Alaska trip exists for this search (e.g. ZRH→SEA). Fall back
       // to the legacy pick — the row's fare_scope then says what it is, and
       // the card says the return may be another airline.
@@ -135,7 +140,7 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
       return others.length ? pickAlaskaLeg(others) : null
     }
 
-    const best = [...alaskaOnly.value].sort(compareItineraries)[0]
+    const best = [...alaskaOnly.value.itineraries].sort(compareItineraries)[0]
 
     // Rival: cheapest itinerary flying NO Alaska leg outbound. Excludes the
     // mixed AS-out/DL-back trips — "Alaska Airlines has it for $688" would
@@ -146,7 +151,14 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
       .filter((it) => !isAlaska(it) && it.price! < best.price!)
       .sort(compareItineraries)[0]
 
-    return toResult(best, rival ?? null, 'alaska_only')
+    return {
+      ...toResult(best, rival ?? null, 'alaska_only'),
+      // Same filtered search, so Google's history describes the same thing
+      // we track — the head start for a new watch (lib/price-check-row.ts
+      // googleHistoryRows). Verified 10/22: its last point ($854) equalled
+      // the cheapest all-Alaska trip returned.
+      priceHistory: alaskaOnly.value.priceHistory,
+    }
   }
 
   /**
@@ -154,7 +166,7 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
    * (best_flights + other_flights), [] when Google has no results, and
    * throws on anything else (quota, HTTP, timeout).
    */
-  private async search(params: FlightSearchParams, includeAirlines?: string): Promise<SerpItinerary[]> {
+  private async search(params: FlightSearchParams, includeAirlines?: string): Promise<SearchResult> {
     const apiKey = process.env.SERPAPI_KEY
     if (!apiKey) throw new Error('SERPAPI_KEY env var is not set')
 
@@ -224,7 +236,7 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
 
     // SerpApi also returns 200 with an `error` string for "no results" cases.
     if (typeof data?.error === 'string') {
-      if (/hasn't returned any results|no results/i.test(data.error)) return []
+      if (/hasn't returned any results|no results/i.test(data.error)) return { itineraries: [], priceHistory: [] }
       throw new Error(`SerpApi error: ${data.error}`)
     }
 
@@ -233,7 +245,19 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
       ...(data.other_flights ?? []),
     ].filter((it: SerpItinerary) => typeof it.price === 'number')
 
-    return all
+    // [[unix seconds, price], ...] — Google's lowest price for THIS search,
+    // one point a day. Malformed points are dropped, not guessed at.
+    const rawHistory: unknown = data.price_insights?.price_history
+    const priceHistory = Array.isArray(rawHistory)
+      ? rawHistory
+          .filter(
+            (pt): pt is [number, number] =>
+              Array.isArray(pt) && Number.isFinite(pt[0]) && Number.isFinite(pt[1]) && pt[1] > 0
+          )
+          .map(([ts, price]) => ({ at: new Date(ts * 1000).toISOString(), price }))
+      : []
+
+    return { itineraries: all, priceHistory }
   }
 }
 

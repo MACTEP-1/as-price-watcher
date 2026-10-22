@@ -20,6 +20,7 @@ import {
   formatItineraryLine,
   formatCompetitorLine,
   formatReturnNote,
+  formatCheckCount,
   formatStopLimit,
   milesScope,
   pctChange,
@@ -218,7 +219,7 @@ export default function WatchDetailScreen() {
       <SeatsAeroCredit />
 
       <Text style={styles.sectionTitle}>
-        Price history ({checks.length} check{checks.length !== 1 ? 's' : ''})
+        Price history ({formatCheckCount(checks)})
       </Text>
 
       {/* A chart, as on web (app/watches/[id]/page.tsx), replacing the

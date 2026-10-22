@@ -5,7 +5,7 @@ import { getWatchDetail } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatStopLimit, milesScope } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatCheckCount, formatStopLimit, milesScope } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
@@ -129,7 +129,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
         {/* Price history chart */}
         <div style={card}>
           <h2 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#334155' }}>
-            Price history ({checks.length} checks)
+            Price history ({formatCheckCount(checks)})
           </h2>
           <PriceHistoryChart history={checks} />
         </div>
