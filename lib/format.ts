@@ -169,6 +169,27 @@ export function formatReturnNote(
 }
 
 /**
+ * The "Airlines" choice on both new-watch forms (migration 010). All Alaska
+ * is the default — the user's choice 10/22 — but the cheaper mixed trip is
+ * a real option (SEA→TPA: $854 all-Alaska via SAN vs $688 AS out / Delta
+ * back), so it stays selectable. Shared so web and mobile say the same.
+ */
+export const FARE_SCOPE_OPTIONS: { value: 'alaska_only' | 'alaska_leg'; label: string }[] = [
+  { value: 'alaska_only', label: 'All Alaska' },
+  { value: 'alaska_leg', label: 'Alaska + others' },
+]
+
+/** One line under the choice, saying what it means for this trip type. */
+export function fareScopeHint(scope: 'alaska_only' | 'alaska_leg', isRoundTrip: boolean): string {
+  if (scope === 'alaska_only') {
+    return "Every flight on Alaska — what alaskaair.com sells. Starts with Google's last ~60 days of prices."
+  }
+  return isRoundTrip
+    ? 'Alaska on the way out, any airline back — often cheaper. History builds from today.'
+    : 'Any trip with an Alaska flight; other legs may be other airlines. History builds from today.'
+}
+
+/**
  * "3 checks", or "3 checks + 60 days from Google" for a watch seeded with
  * Google's price history (migration 011). Counting the copied days as our
  * own checks would overstate how long we've been watching.

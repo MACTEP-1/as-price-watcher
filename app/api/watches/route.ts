@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { origin, destination, departDate, returnDate, cabinClass, maxStops } = body
+  const { origin, destination, departDate, returnDate, cabinClass, maxStops, fareScope } = body
 
   if (!origin || !destination || !departDate) {
     return NextResponse.json({ error: 'origin, destination, and departDate are required' }, { status: 400 })
@@ -71,6 +71,21 @@ export async function POST(req: NextRequest) {
   }
 
   /**
+   * What to track (migration 010): 'alaska_only' (all-Alaska trip, the
+   * default since 2026-10-22) or 'alaska_leg' (any trip with an Alaska
+   * flight — on a round trip the return can be another airline). Part of
+   * the itinerary's identity, like the stop limit.
+   */
+  const normalisedFareScope: 'alaska_only' | 'alaska_leg' =
+    fareScope === undefined || fareScope === null ? 'alaska_only' : fareScope
+  if (!['alaska_only', 'alaska_leg'].includes(normalisedFareScope)) {
+    return NextResponse.json(
+      { error: "fareScope must be 'alaska_only', 'alaska_leg', or omitted" },
+      { status: 400 }
+    )
+  }
+
+  /**
    * Find-or-create the itinerary. This is a SECURITY DEFINER function rather
    * than a direct insert: granting users INSERT on `itineraries` would let
    * anyone write arbitrary rows into a table shared by every user. The
@@ -86,10 +101,9 @@ export async function POST(req: NextRequest) {
       p_return_date: normalisedReturn,
       p_cabin_class: cabinClass ?? 'economy',
       p_max_stops: normalisedMaxStops,
-      // Every new watch tracks an all-Alaska trip (migration 010, user's
-      // choice 2026-10-22). Older watches keep their 'alaska_leg'
-      // itineraries; this makes a separate itinerary, never a merge.
-      p_fare_scope: 'alaska_only',
+      // All-Alaska unless the form asked otherwise (see above). A different
+      // scope is a separate itinerary, never a merge.
+      p_fare_scope: normalisedFareScope,
     }
   )
 
@@ -158,7 +172,7 @@ export async function POST(req: NextRequest) {
           returnDate: normalisedReturn,
           cabinClass: (cabinClass ?? 'economy') as CabinClass,
           maxStops: normalisedMaxStops,
-          fareScope: 'alaska_only',
+          fareScope: normalisedFareScope,
         }),
         getCheapestMilesPrice({
           origin,

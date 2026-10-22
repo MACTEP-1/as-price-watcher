@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import AirportAutocomplete from '@/components/AirportAutocomplete'
+import { FARE_SCOPE_OPTIONS, fareScopeHint } from '@/lib/format'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy (Saver / Main)' },
@@ -72,6 +73,7 @@ export default function NewWatchPage() {
     origin: '', destination: '', departDate: '', returnDate: '', cabinClass: 'economy',
   })
   const [maxStops, setMaxStops] = useState<number | null>(null)
+  const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>('alaska_only')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -115,6 +117,7 @@ export default function NewWatchPage() {
         returnDate: tripType === 'round_trip' ? form.returnDate : null,
         cabinClass: form.cabinClass,
         maxStops,
+        fareScope,
       }),
     })
     const data = await res.json()
@@ -245,6 +248,25 @@ export default function NewWatchPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Airlines</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {FARE_SCOPE_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setFareScope(o.value)}
+                  style={{ ...pill(fareScope === o.value), flex: 1, padding: '8px 4px', fontSize: 12 }}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#94a3b8' }}>
+              {fareScopeHint(fareScope, tripType === 'round_trip')}
+            </p>
           </div>
 
           {error && (

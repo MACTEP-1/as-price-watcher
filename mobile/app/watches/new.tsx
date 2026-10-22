@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router'
 import { createWatch } from '../../lib/api'
 import DatePickerField from '../../components/DatePickerField'
 import AirportAutocomplete from '../../components/AirportAutocomplete'
+import { FARE_SCOPE_OPTIONS, fareScopeHint } from '../../../lib/format'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy' },
@@ -79,6 +80,7 @@ export default function NewWatchScreen() {
     cabinClass: 'economy' as string,
   })
   const [maxStops, setMaxStops] = useState<number | null>(null)
+  const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>('alaska_only')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -138,6 +140,7 @@ export default function NewWatchScreen() {
         returnDate: isRoundTrip ? form.returnDate : null,
         cabinClass: form.cabinClass,
         maxStops,
+        fareScope,
       })
       router.replace(`/watches/${watch.id}`)
     } catch (err) {
@@ -287,6 +290,25 @@ export default function NewWatchScreen() {
           )
         })}
       </View>
+
+      <Text style={styles.label}>Airlines</Text>
+      <View style={styles.pillRow}>
+        {FARE_SCOPE_OPTIONS.map((o) => {
+          const active = fareScope === o.value
+          return (
+            <Pressable
+              key={o.value}
+              onPress={() => setFareScope(o.value)}
+              style={[styles.pillFlex, active && styles.pillActive]}
+            >
+              <Text style={[styles.pillText, active && styles.pillTextActive]}>
+                {o.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      <Text style={styles.fieldHint}>{fareScopeHint(fareScope, isRoundTrip)}</Text>
       </View>
 
       {!!error && (
@@ -337,6 +359,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   labelFirst: { marginTop: 0 },
+  fieldHint: { fontSize: 12, color: '#94a3b8', marginTop: 6 },
   row: { flexDirection: 'row', gap: 16, marginTop: 4 },
   half: { flex: 1 },
   full: { flex: 1 },

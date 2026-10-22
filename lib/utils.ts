@@ -22,6 +22,8 @@ export {
   formatCompetitorLine,
   formatReturnNote,
   formatCheckCount,
+  FARE_SCOPE_OPTIONS,
+  fareScopeHint,
   formatStopLimit,
   milesScope,
 } from './format'
