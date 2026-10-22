@@ -86,6 +86,10 @@ export async function POST(req: NextRequest) {
       p_return_date: normalisedReturn,
       p_cabin_class: cabinClass ?? 'economy',
       p_max_stops: normalisedMaxStops,
+      // Every new watch tracks an all-Alaska trip (migration 010, user's
+      // choice 2026-10-22). Older watches keep their 'alaska_leg'
+      // itineraries; this makes a separate itinerary, never a merge.
+      p_fare_scope: 'alaska_only',
     }
   )
 
@@ -154,6 +158,7 @@ export async function POST(req: NextRequest) {
           returnDate: normalisedReturn,
           cabinClass: (cabinClass ?? 'economy') as CabinClass,
           maxStops: normalisedMaxStops,
+          fareScope: 'alaska_only',
         }),
         getCheapestMilesPrice({
           origin,

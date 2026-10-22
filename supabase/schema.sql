@@ -1,4 +1,4 @@
--- AS Price Watcher — Supabase schema (canonical, current through migration 009)
+-- AS Price Watcher — Supabase schema (canonical, current through migration 010)
 --
 -- For a FRESH database, run this file.
 -- For an EXISTING one, run the files in supabase/migrations/ in order
@@ -73,6 +73,13 @@ create table if not exists itineraries (
   max_stops     smallint
                   constraint itineraries_max_stops_check
                   check (max_stops is null or max_stops between 0 and 2),
+  -- What the tracked price means (migration 010): 'alaska_only' = an
+  -- all-Alaska trip (every watch created from 2026-10-22); 'alaska_leg' =
+  -- the legacy pick, cheapest itinerary with ANY Alaska leg (on a round
+  -- trip the return can be another airline). Part of the identity.
+  fare_scope    text not null default 'alaska_leg'
+                  constraint itineraries_fare_scope_check
+                  check (fare_scope in ('alaska_leg', 'alaska_only')),
   created_at    timestamptz not null default now()
 );
 
@@ -83,7 +90,7 @@ create table if not exists itineraries (
 create unique index if not exists itineraries_unique_idx
   on itineraries (origin, destination, depart_date,
                   coalesce(return_date, 'infinity'::date), cabin_class,
-                  coalesce(max_stops, -1));
+                  coalesce(max_stops, -1), fare_scope);
 
 alter table itineraries enable row level security;
 
@@ -171,7 +178,13 @@ create table if not exists price_checks (
   -- Every OUTBOUND leg of the tracked itinerary, in order (migration 005):
   -- [{"flight": "LO412", "from": "ZRH", "to": "WAW"}, ...]. Lets the UI show
   -- which leg is Alaska on multi-carrier routings. Null on older rows.
-  legs                  jsonb
+  legs                  jsonb,
+  -- What THIS price was (migration 010): 'alaska_only', 'alaska_leg', or
+  -- 'any_airline' (no Alaska itinerary). An alaska_only itinerary records
+  -- 'alaska_leg' on a day no all-Alaska trip existed. Null on older rows.
+  fare_scope            text
+                  constraint price_checks_fare_scope_check
+                  check (fare_scope is null or fare_scope in ('alaska_only', 'alaska_leg', 'any_airline'))
 );
 
 alter table price_checks enable row level security;
@@ -236,7 +249,8 @@ create or replace function find_or_create_itinerary(
   p_depart_date date,
   p_return_date date,
   p_cabin_class text,
-  p_max_stops   integer default null
+  p_max_stops   integer default null,
+  p_fare_scope  text    default 'alaska_leg'   -- migration 010; new watches pass 'alaska_only'
 ) returns uuid
 language plpgsql
 security definer
@@ -251,14 +265,15 @@ begin
      and depart_date = p_depart_date
      and coalesce(return_date, 'infinity'::date) = coalesce(p_return_date, 'infinity'::date)
      and cabin_class = p_cabin_class
-     and coalesce(max_stops, -1) = coalesce(p_max_stops, -1);
+     and coalesce(max_stops, -1) = coalesce(p_max_stops, -1)
+     and fare_scope = p_fare_scope;
 
   if v_id is not null then
     return v_id;
   end if;
 
-  insert into itineraries (origin, destination, depart_date, return_date, cabin_class, max_stops)
-  values (p_origin, p_destination, p_depart_date, p_return_date, p_cabin_class, p_max_stops)
+  insert into itineraries (origin, destination, depart_date, return_date, cabin_class, max_stops, fare_scope)
+  values (p_origin, p_destination, p_depart_date, p_return_date, p_cabin_class, p_max_stops, p_fare_scope)
   returning id into v_id;
 
   return v_id;
@@ -270,7 +285,8 @@ exception when unique_violation then
      and depart_date = p_depart_date
      and coalesce(return_date, 'infinity'::date) = coalesce(p_return_date, 'infinity'::date)
      and cabin_class = p_cabin_class
-     and coalesce(max_stops, -1) = coalesce(p_max_stops, -1);
+     and coalesce(max_stops, -1) = coalesce(p_max_stops, -1)
+     and fare_scope = p_fare_scope;
   return v_id;
 end;
 $$;
@@ -279,8 +295,8 @@ $$;
 -- new functions to anon/authenticated/service_role directly, so revoking
 -- from public alone left logged-out callers able to run this SECURITY
 -- DEFINER function (found live 2026-09-24, fixed in migration 006).
-revoke all on function find_or_create_itinerary(text,text,date,date,text,integer) from public, anon;
-grant execute on function find_or_create_itinerary(text,text,date,date,text,integer) to authenticated, service_role;
+revoke all on function find_or_create_itinerary(text,text,date,date,text,integer,text) from public, anon;
+grant execute on function find_or_create_itinerary(text,text,date,date,text,integer,text) to authenticated, service_role;
 
 -- ─────────────────────────────────────────────
 -- Indexes

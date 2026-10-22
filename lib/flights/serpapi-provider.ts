@@ -11,10 +11,11 @@
  *                          flight exists on the route, instead of falling
  *                          back to the cheapest flight on any carrier.
  *
- * Quota math: each cron tick spends 1 search per active watch.
- *   every  4h = 6/day  = ~180/mo  → 1 watch on free tier
- *   every  6h = 4/day  = ~120/mo  → 2 watches on free tier
- *   every 12h = 2/day  =  ~60/mo  → 4 watches on free tier
+ * Quota math (one daily cron run): a legacy 'alaska_leg' itinerary costs
+ * 1 search per day; an 'alaska_only' one (every watch created from
+ * 2026-10-22) costs 2 — the Alaska-only search plus an unfiltered one for
+ * the "cheaper elsewhere" line. Free tier 250/month ≈ 4 alaska_only
+ * itineraries at once. Creating a watch spends the same once more.
  */
 
 import type { FlightPriceProvider, FlightSearchParams, CashFareResult } from './types'
@@ -102,6 +103,58 @@ function compareItineraries(a: SerpItinerary, b: SerpItinerary): number {
 
 export class SerpApiFlightProvider implements FlightPriceProvider {
   async getCheapestFare(params: FlightSearchParams): Promise<CashFareResult | null> {
+    if (params.fareScope !== 'alaska_only') {
+      const all = await this.search(params)
+      return all.length ? pickAlaskaLeg(all) : null
+    }
+
+    // ── All-Alaska (migration 010, user's choice 2026-10-22) ───────────
+    // Why: the legacy pick below takes the cheapest itinerary with ANY
+    // Alaska leg — on a round trip only the OUTBOUND is visible, so SEA→TPA
+    // tracked "$688 Alaska" that was really AS 326 out + Delta DL 1090
+    // back (confirmed on Google Flights 10/22), while an Alaska round trip
+    // cost $854–932. So: one search restricted to Alaska for the tracked
+    // price, plus one unfiltered search for the cheaper-elsewhere line.
+    // In parallel, each under its own 8s timeout.
+    const [alaskaOnly, unfiltered] = await Promise.allSettled([
+      this.search(params, 'AS'),
+      this.search(params),
+    ])
+
+    // A failed Alaska-only search is an error, not a reason to substitute a
+    // different kind of price: one missing day beats a series that quietly
+    // mixes "Alaska round trip" with "Alaska there, anyone back".
+    if (alaskaOnly.status === 'rejected') throw alaskaOnly.reason
+    const others = unfiltered.status === 'fulfilled' ? unfiltered.value : []
+
+    if (alaskaOnly.value.length === 0) {
+      // No all-Alaska trip exists for this search (e.g. ZRH→SEA). Fall back
+      // to the legacy pick — the row's fare_scope then says what it is, and
+      // the card says the return may be another airline.
+      if (unfiltered.status === 'rejected') throw unfiltered.reason
+      return others.length ? pickAlaskaLeg(others) : null
+    }
+
+    const best = [...alaskaOnly.value].sort(compareItineraries)[0]
+
+    // Rival: cheapest itinerary flying NO Alaska leg outbound. Excludes the
+    // mixed AS-out/DL-back trips — "Alaska Airlines has it for $688" would
+    // be nonsense next to an Alaska price. Null if the unfiltered search
+    // failed: the tracked price is still good, the context just goes
+    // missing for a day.
+    const rival = others
+      .filter((it) => !isAlaska(it) && it.price! < best.price!)
+      .sort(compareItineraries)[0]
+
+    return toResult(best, rival ?? null, 'alaska_only')
+  }
+
+  /**
+   * One SerpApi Google Flights request. Returns every priced itinerary
+   * (best_flights + other_flights), [] when Google has no results, and
+   * throws on anything else (quota, HTTP, timeout).
+   */
+  private async search(params: FlightSearchParams, includeAirlines?: string): Promise<SerpItinerary[]> {
     const apiKey = process.env.SERPAPI_KEY
     if (!apiKey) throw new Error('SERPAPI_KEY env var is not set')
 
@@ -129,6 +182,11 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     // the cheapest fitting itinerary on any airline (user's choice, 09/24);
     // the card then says "no Alaska leg" (lib/format.ts).
     if (params.maxStops != null) query.set('stops', String(params.maxStops + 1))
+
+    // 'AS' for the all-Alaska search (migration 010). Google then returns
+    // only itineraries whose every flight is Alaska — the round trip
+    // alaskaair.com itself would sell.
+    if (includeAirlines) query.set('include_airlines', includeAirlines)
 
     // Keep the request inside the cron's 30s budget.
     //
@@ -166,7 +224,7 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
 
     // SerpApi also returns 200 with an `error` string for "no results" cases.
     if (typeof data?.error === 'string') {
-      if (/hasn't returned any results|no results/i.test(data.error)) return null
+      if (/hasn't returned any results|no results/i.test(data.error)) return []
       throw new Error(`SerpApi error: ${data.error}`)
     }
 
@@ -175,66 +233,87 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
       ...(data.other_flights ?? []),
     ].filter((it: SerpItinerary) => typeof it.price === 'number')
 
-    if (all.length === 0) return null
+    return all
+  }
+}
 
-    const alaska = all.filter(isAlaska)
+/**
+ * The legacy pick ('alaska_leg' itineraries, and the fallback when no
+ * all-Alaska trip exists): cheapest itinerary with ANY Alaska leg, else
+ * cheapest on any airline.
+ */
+function pickAlaskaLeg(all: SerpItinerary[]): CashFareResult | null {
+  const alaska = all.filter(isAlaska)
 
-    if (alaska.length === 0 && process.env.SERPAPI_STRICT_AS === 'true') {
-      return null
-    }
+  if (alaska.length === 0 && process.env.SERPAPI_STRICT_AS === 'true') {
+    return null
+  }
 
-    const candidates = alaska.length > 0 ? alaska : all
+  const candidates = alaska.length > 0 ? alaska : all
 
-    // Sort a COPY — Array.sort mutates in place, and `candidates` is a live
-    // reference to `alaska` or `all`. See compareItineraries above for why
-    // this is a full sort rather than a cheaper "min by price" reduce:
-    // ties have to break the same way on every call, or the stored
-    // flight_number churns between equal-priced flights.
-    const best = [...candidates].sort(compareItineraries)[0]
+  // Sort a COPY — Array.sort mutates in place, and `candidates` is a live
+  // reference to `alaska` or `all`. See compareItineraries above for why
+  // this is a full sort rather than a cheaper "min by price" reduce:
+  // ties have to break the same way on every call, or the stored
+  // flight_number churns between equal-priced flights.
+  const best = [...candidates].sort(compareItineraries)[0]
 
-    // ── Cheapest on ANY airline, for context ───────────────────────────
-    //
-    // Free: `all` is already in hand — every carrier came back in the same
-    // response and our own filter above is what narrows it to Alaska. On
-    // SEA→TPA Nov 10–15 that discarded a $427 United fare while tracking
-    // Alaska at $686, with nothing in the UI hinting it existed.
-    //
-    // Reported only when it genuinely beats the tracked fare AND isn't the
-    // same itinerary: when the route has no Alaska service at all,
-    // `candidates` IS `all`, so `best` is already the cheapest of any
-    // airline and there is no "competitor" to name (`airline` on the row
-    // describes it instead). Same deterministic ordering, so the airline
-    // named doesn't churn between equal-priced rivals.
-    const cheapestOverall = [...all].sort(compareItineraries)[0]
-    const hasCheaperRival =
-      cheapestOverall !== best && cheapestOverall.price! < best.price!
+  // ── Cheapest on ANY airline, for context ───────────────────────────
+  //
+  // Free: `all` is already in hand — every carrier came back in the same
+  // response and our own filter above is what narrows it to Alaska. On
+  // SEA→TPA Nov 10–15 that discarded a $427 United fare while tracking
+  // Alaska at $686, with nothing in the UI hinting it existed.
+  //
+  // Reported only when it genuinely beats the tracked fare AND isn't the
+  // same itinerary: when the route has no Alaska service at all,
+  // `candidates` IS `all`, so `best` is already the cheapest of any
+  // airline and there is no "competitor" to name (`airline` on the row
+  // describes it instead). Same deterministic ordering, so the airline
+  // named doesn't churn between equal-priced rivals.
+  const cheapestOverall = [...all].sort(compareItineraries)[0]
+  const hasCheaperRival =
+    cheapestOverall !== best && cheapestOverall.price! < best.price!
 
-    const legs = best.flights ?? []
-    const firstLeg = legs[0]
+  return toResult(
+    best,
+    hasCheaperRival ? cheapestOverall : null,
+    alaska.length > 0 ? 'alaska_leg' : 'any_airline'
+  )
+}
 
-    // Even for a round trip, `flights[]` holds ONLY the outbound legs — the
-    // return leg requires a second call with `departure_token`, which we skip
-    // to stay inside quota. `price`, however, is already the full round-trip
-    // fare. So stops/duration describe the outbound journey, and the price
-    // covers both directions.
-    const stops = Math.max(0, legs.length - 1)
+/** Shape the tracked itinerary (+ optional cheaper rival) into a result. */
+function toResult(
+  best: SerpItinerary,
+  rival: SerpItinerary | null,
+  fareScope: CashFareResult['fareScope']
+): CashFareResult {
+  const legs = best.flights ?? []
+  const firstLeg = legs[0]
 
-    return {
-      cashPrice: best.price!,
-      currency: 'USD',
-      flightNumber: firstLeg?.flight_number?.replace(/\s+/g, '') ?? null,
-      durationMinutes: best.total_duration ?? null,
-      stops,
-      competitorCashPrice: hasCheaperRival ? cheapestOverall.price! : null,
-      competitorAirline: hasCheaperRival ? airlineNameOf(cheapestOverall) : null,
-      // All legs, not just the first: on ZRH->SEA the tracked "Alaska
-      // itinerary" started with Icelandair/LOT and only a later leg was AS,
-      // so the first flight number alone misdescribed it (migration 005).
-      legs: legs.map((leg) => ({
-        flight: leg.flight_number?.replace(/\s+/g, '') ?? null,
-        from: leg.departure_airport?.id ?? null,
-        to: leg.arrival_airport?.id ?? null,
-      })),
-    }
+  // Even for a round trip, `flights[]` holds ONLY the outbound legs — the
+  // return leg requires a second call with `departure_token`, which we skip
+  // to stay inside quota. `price`, however, is already the full round-trip
+  // fare. So stops/duration describe the outbound journey, and the price
+  // covers both directions.
+  const stops = Math.max(0, legs.length - 1)
+
+  return {
+    cashPrice: best.price!,
+    currency: 'USD',
+    flightNumber: firstLeg?.flight_number?.replace(/\s+/g, '') ?? null,
+    durationMinutes: best.total_duration ?? null,
+    stops,
+    competitorCashPrice: rival ? rival.price! : null,
+    competitorAirline: rival ? airlineNameOf(rival) : null,
+    fareScope,
+    // All legs, not just the first: on ZRH->SEA the tracked "Alaska
+    // itinerary" started with Icelandair/LOT and only a later leg was AS,
+    // so the first flight number alone misdescribed it (migration 005).
+    legs: legs.map((leg) => ({
+      flight: leg.flight_number?.replace(/\s+/g, '') ?? null,
+      from: leg.departure_airport?.id ?? null,
+      to: leg.arrival_airport?.id ?? null,
+    })),
   }
 }

@@ -19,6 +19,7 @@ import {
   formatDate,
   formatItineraryLine,
   formatCompetitorLine,
+  formatReturnNote,
   formatStopLimit,
   milesScope,
   pctChange,
@@ -193,7 +194,7 @@ export default function WatchDetailScreen() {
           <Text style={styles.itineraryLine}>
             {watch.return_date ? 'Outbound: ' : 'Best: '}
             {formatItineraryLine(latest)}
-            {watch.return_date ? ' · return not priced separately' : ''}
+            {watch.return_date ? ` · ${formatReturnNote(latest)}` : ''}
           </Text>
         )}
 

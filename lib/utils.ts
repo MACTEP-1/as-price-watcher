@@ -20,6 +20,7 @@ export {
   alertLabel,
   formatItineraryLine,
   formatCompetitorLine,
+  formatReturnNote,
   formatStopLimit,
   milesScope,
 } from './format'

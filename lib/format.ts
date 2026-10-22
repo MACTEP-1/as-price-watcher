@@ -150,6 +150,24 @@ export function formatItineraryLine(check: {
     .join(' · ')
 }
 
+/**
+ * Round trips only: what we know about the RETURN half. The provider sees
+ * only outbound flights (the return needs a second, paid call), but the
+ * price is the whole round trip — and what that round trip is depends on
+ * how it was searched (migration 010):
+ * - 'alaska_only' rows come from an Alaska-only search, so the return is
+ *   on Alaska too, flight unknown;
+ * - anything else (legacy rows, the no-all-Alaska fallback) is the cheapest
+ *   trip with an Alaska leg out, so the return can be anyone — SEA→TPA's
+ *   "$688 Alaska" was AS 326 out and Delta DL 1090 back (10/22).
+ * Replaces the old "return not priced separately", which hid that.
+ */
+export function formatReturnNote(
+  check: { fare_scope?: string | null } | null | undefined
+): string {
+  return check?.fare_scope === 'alaska_only' ? 'return on Alaska' : 'return may be another airline'
+}
+
 const isAlaskaLeg = (flight: string | null) => !!flight && /^AS\s*\d/i.test(flight)
 
 /**

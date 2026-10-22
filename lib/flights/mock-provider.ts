@@ -89,6 +89,7 @@ export class MockFlightPriceProvider implements FlightPriceProvider {
       stops,
       competitorCashPrice: hasRival ? Math.round((cashPrice * 0.75) / 5) * 5 : null,
       competitorAirline: hasRival ? 'United' : null,
+      fareScope: params.fareScope ?? 'alaska_leg',
       // Nonstop fakes get one leg; one-stop fakes get a plausible SEA
       // connection with the Alaska leg second, so UI work exercises the
       // multi-carrier "Alaska flies X-Y" suffix.

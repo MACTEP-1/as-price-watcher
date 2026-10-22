@@ -26,6 +26,7 @@ import {
   formatDate,
   formatItineraryLine,
   formatCompetitorLine,
+  formatReturnNote,
   formatStopLimit,
   milesScope,
   pctChange,
@@ -211,7 +212,7 @@ export default function DashboardScreen() {
               {!!itineraryLine && (
                 <Text style={styles.itineraryLine}>
                   {isRoundTrip
-                    ? `Outbound ${itineraryLine} · return not priced separately`
+                    ? `Outbound ${itineraryLine} · ${formatReturnNote(latestCheck)}`
                     : itineraryLine}
                 </Text>
               )}

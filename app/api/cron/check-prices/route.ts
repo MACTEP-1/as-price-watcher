@@ -235,6 +235,8 @@ async function runPriceCheck(): Promise<NextResponse> {
           returnDate: itinerary.return_date,
           cabinClass: itinerary.cabin_class,
           maxStops: itinerary.max_stops,
+          // 'alaska_only' runs two searches — see the provider.
+          fareScope: itinerary.fare_scope,
         }),
         getCheapestMilesPrice({
           origin: itinerary.origin,

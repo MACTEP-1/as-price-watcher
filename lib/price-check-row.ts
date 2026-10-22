@@ -34,5 +34,7 @@ export function priceCheckRow(
     // Empty array means the provider didn't map legs (duffel) — store null
     // so the UI falls back to the flight_number-only line, same as old rows.
     legs: cash?.legs?.length ? cash.legs : null,
+    // What the price was (migration 010). Null when there's no cash price.
+    fare_scope: cash?.fareScope ?? null,
   }
 }

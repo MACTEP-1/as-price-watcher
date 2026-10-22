@@ -7,6 +7,24 @@ export type CabinClass = 'economy' | 'premium_economy' | 'business' | 'first'
 export type WatchStatus = 'active' | 'expired' | 'removed' | 'unsubscribed'
 
 /**
+ * What an itinerary's tracked price means (migration 010):
+ * - 'alaska_only': an all-Alaska trip (SerpApi include_airlines=AS) — what
+ *   alaskaair.com would sell. Every watch created from 2026-10-22.
+ * - 'alaska_leg': the legacy pick — cheapest itinerary with ANY Alaska leg.
+ *   On a round trip only the outbound is checked, so the return can be
+ *   another airline (SEA→TPA: AS 326 out, Delta DL 1090 back).
+ */
+export type ItineraryFareScope = 'alaska_only' | 'alaska_leg'
+
+/**
+ * What ONE stored price actually was: an itinerary's scope, or
+ * 'any_airline' when no Alaska itinerary existed and the provider fell back.
+ * An 'alaska_only' itinerary records 'alaska_leg' on a day no all-Alaska
+ * trip existed. Null on rows written before migration 010.
+ */
+export type PriceFareScope = ItineraryFareScope | 'any_airline'
+
+/**
  * A priceable journey, independent of who is watching it. Unique on
  * (origin, destination, depart_date, return_date, cabin_class) — so N users
  * watching the same trip cost ONE price check, not N.
@@ -24,6 +42,8 @@ export interface Itinerary {
   // Stop limit (migration 006): null = any, 0 = nonstop only, 1 = up to 1
   // stop, 2 = up to 2 stops. Part of the itinerary's identity.
   max_stops: number | null
+  // Migration 010 — see ItineraryFareScope. Part of the identity.
+  fare_scope: ItineraryFareScope
   created_at: string
 }
 
@@ -69,6 +89,9 @@ export interface PriceCheck {
   competitor_airline: string | null
   // Outbound legs in order, or null on rows written before migration 005.
   legs: FlightLeg[] | null
+  // What this price was (migration 010); null before it — those rows are
+  // all 'alaska_leg'/'any_airline' in practice.
+  fare_scope?: PriceFareScope | null
 }
 
 /**
