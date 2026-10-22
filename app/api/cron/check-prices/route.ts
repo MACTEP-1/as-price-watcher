@@ -340,6 +340,10 @@ async function runPriceCheck(): Promise<NextResponse> {
             miles_price: trigger.milesPrice,
             prev_cash_price: trigger.prevCashPrice,
             prev_miles_price: trigger.prevMilesPrice,
+            // What it was actually measured against (migration 009) — so an
+            // alert can be explained later without replaying the history.
+            baseline_cash_price: trigger.baselineCashPrice,
+            baseline_miles_price: trigger.baselineMilesPrice,
             email_sent: false,
           })
           .select()

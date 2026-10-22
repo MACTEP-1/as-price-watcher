@@ -86,6 +86,9 @@ export interface Alert {
   prev_cash_price: number | null
   prev_miles_price: number | null
   email_sent: boolean
+  /** What the alert was measured against — null on rows before migration 009. */
+  baseline_cash_price?: number | null
+  baseline_miles_price?: number | null
 }
 
 /**

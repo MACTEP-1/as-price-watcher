@@ -1,4 +1,4 @@
--- AS Price Watcher — Supabase schema (canonical, current through migration 008)
+-- AS Price Watcher — Supabase schema (canonical, current through migration 009)
 --
 -- For a FRESH database, run this file.
 -- For an EXISTING one, run the files in supabase/migrations/ in order
@@ -206,7 +206,12 @@ create table if not exists alerts (
   miles_price      integer,
   prev_cash_price  numeric(10,2),
   prev_miles_price integer,
-  email_sent       boolean not null default false
+  email_sent       boolean not null default false,
+  -- What the alert was measured against (lib/alerts.ts baseline*):
+  -- 7-day average / previous low / last-reported price. Migration 009.
+  -- prev_* above is just the previous check and can mislead.
+  baseline_cash_price  numeric(10,2),
+  baseline_miles_price numeric(12,2)
 );
 
 alter table alerts enable row level security;
