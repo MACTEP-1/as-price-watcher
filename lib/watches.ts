@@ -120,6 +120,12 @@ export async function getWatchesWithPrices(
         prev_cash: prev?.cash_price ?? null,
         prev_miles: prev?.miles_price ?? null,
         price_history: history.slice(-SPARKLINE_POINTS),
+        // Counted over the FULL history: the card's "N checks" line used to
+        // count the trimmed sparkline slice, so it never said more than 14.
+        check_counts: {
+          own: history.filter((c) => c.source !== 'google_history').length,
+          google: history.filter((c) => c.source === 'google_history').length,
+        },
       }
     })
 }

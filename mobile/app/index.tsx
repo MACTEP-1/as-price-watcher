@@ -227,7 +227,7 @@ export default function DashboardScreen() {
 
               <View style={styles.footer}>
                 <Text style={styles.checkCount}>
-                  {formatCheckCount(item.price_history)}
+                  {formatCheckCount(item.check_counts ?? item.price_history)}
                 </Text>
                 {/* Nested inside the card's Pressable, so it needs its own
                     hitSlop and must not bubble — onPress on a child Pressable

@@ -197,9 +197,11 @@ export function fareScopeHint(scope: 'alaska_only' | 'alaska_leg', isRoundTrip: 
  * Google's price history (migration 011). Counting the copied days as our
  * own checks would overstate how long we've been watching.
  */
-export function formatCheckCount(checks: { source?: string | null }[]): string {
-  const own = checks.filter((c) => c.source !== 'google_history').length
-  const google = checks.length - own
+export function formatCheckCount(
+  checks: { source?: string | null }[] | { own: number; google: number }
+): string {
+  const own = Array.isArray(checks) ? checks.filter((c) => c.source !== 'google_history').length : checks.own
+  const google = Array.isArray(checks) ? checks.length - own : checks.google
   const base = `${own} check${own === 1 ? '' : 's'}`
   return google > 0 ? `${base} + ${google} day${google === 1 ? '' : 's'} from Google` : base
 }

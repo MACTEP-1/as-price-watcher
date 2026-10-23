@@ -153,4 +153,8 @@ export interface WatchWithLatestPrice {
   prev_cash: number | null
   prev_miles: number | null
   price_history: PriceCheck[]
+  // How many rows the FULL history has (price_history above is trimmed to
+  // the last few points for the sparkline) — own checks vs days copied from
+  // Google's history (migration 011). Set by getWatchesWithPrices.
+  check_counts?: { own: number; google: number }
 }

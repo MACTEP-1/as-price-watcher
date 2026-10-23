@@ -11,7 +11,7 @@
 import formatModule from '../format.ts'
 import providerModule from '../flights/serpapi-provider.ts'
 
-const { parseFlightList, normaliseFlightList, pinnedFareScope, formatWatchLimits, pinPrefillParams, formatReturnNote } =
+const { parseFlightList, normaliseFlightList, pinnedFareScope, formatWatchLimits, pinPrefillParams, formatReturnNote, formatCheckCount } =
   formatModule as unknown as typeof import('../format.ts')
 const { SerpApiFlightProvider } = providerModule as unknown as {
   SerpApiFlightProvider: typeof import('../flights/serpapi-provider.ts').SerpApiFlightProvider
@@ -59,6 +59,9 @@ check('return note: a pinned return names the flight',
   formatReturnNote({ fare_scope: 'alaska_leg' }, { return_flights: ['DL1090'] }), 'return DL 1090')
 check('return note: unpinned all-Alaska row unchanged',
   formatReturnNote({ fare_scope: 'alaska_only' }, { return_flights: null }), 'return on Alaska')
+
+check('check count from full-history counts (dashboard card)',
+  formatCheckCount({ own: 1, google: 61 }), '1 check + 61 days from Google')
 
 const w = { origin: 'SEA', destination: 'TPA', depart_date: '2026-11-10', return_date: '2026-11-15', cabin_class: 'economy' }
 check('prefill: from the latest check\'s legs',

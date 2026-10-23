@@ -129,7 +129,7 @@ export default function WatchCard({ watch }: Props) {
 
       <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ fontSize: 12, color: '#94a3b8' }}>
-          {formatCheckCount(watch.price_history)}
+          {formatCheckCount(watch.check_counts ?? watch.price_history)}
         </span>
         {/* Outside the <Link> above — a nested <a> is invalid HTML and React
             will not render it. See lib/booking.ts for why Google and not
