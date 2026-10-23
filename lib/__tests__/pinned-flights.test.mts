@@ -79,6 +79,7 @@ const itin = (price: number, token: string | null, ...flights: [string, string][
 const OUTBOUNDS = {
   best_flights: [
     itin(409, 'tok-wn', ['Southwest', 'WN 4519'], ['Southwest', 'WN 3095']),
+    itin(611, 'tok-dl', ['Delta', 'DL 1234']),
     itin(688, 'tok-326', ['Alaska', 'AS 326']),
     itin(854, 'tok-623', ['Alaska', 'AS 623'], ['Alaska', 'AS 625']),
   ],
@@ -98,20 +99,28 @@ const base = { origin: 'SEA', destination: 'TPA', departDate: '2026-11-10', retu
 const sum = (r: any) => r && { cash: r.cashPrice, scope: r.fareScope, flight: r.flightNumber, rival: r.competitorAirline }
 
 requests = []
-check('outbound pinned: that flight with Google\'s cheapest return, one search',
+check('outbound pinned: that flight with Google\'s cheapest return, one search; rival nonstop like the pin',
   [sum(await p.getCheapestFare({ ...base, outboundFlights: ['AS326'] })), requests.length],
-  [{ cash: 688, scope: 'alaska_leg', flight: 'AS326', rival: 'Southwest' }, 1])
+  [{ cash: 688, scope: 'alaska_leg', flight: 'AS326', rival: 'Delta' }, 1])
 
 requests = []
 check('outbound + return pinned: the exact pair\'s round-trip price, two searches',
   [sum(await p.getCheapestFare({ ...base, outboundFlights: ['AS326'], returnFlights: ['AS325'] })), requests.map((r) => r.token)],
-  [{ cash: 932, scope: 'alaska_only', flight: 'AS326', rival: 'Southwest' }, [null, 'tok-326']])
+  [{ cash: 932, scope: 'alaska_only', flight: 'AS326', rival: 'Delta' }, [null, 'tok-326']])
 
 requests = []
 await p.getCheapestFare({ ...base, outboundFlights: ['AS326'], maxStops: 0, fareScope: 'alaska_only' })
 check('pinned: stop limit and Airlines filter not sent — the flights decide', requests, [{ token: null, stops: null, airlines: null }])
 
-check('connection pinned in order', sum(await p.getCheapestFare({ ...base, outboundFlights: ['AS623', 'AS625'] }))?.cash, 854)
+check('connection pinned in order; a one-stop rival is fair game',
+  sum(await p.getCheapestFare({ ...base, outboundFlights: ['AS623', 'AS625'] })), { cash: 854, scope: 'alaska_leg', flight: 'AS623', rival: 'Southwest' })
+
+;(globalThis as any).fetch = async () => ({
+  ok: true, status: 200, text: async () => '',
+  json: async () => ({ best_flights: [itin(409, null, ['Southwest', 'WN 1'], ['Southwest', 'WN 2']), itin(581, null, ['Alaska', 'AS 679'])] }),
+})
+check('pinned nonstop, only a one-stop fare is cheaper → no rival (the SFO→PVR case)',
+  sum(await p.getCheapestFare({ ...base, outboundFlights: ['AS679'] }))?.rival, null)
 check('connection in the wrong order is not a match', await p.getCheapestFare({ ...base, outboundFlights: ['AS625', 'AS623'] }), null)
 check('pinned outbound not on sale → no price, not a substitute', await p.getCheapestFare({ ...base, outboundFlights: ['AS999'] }), null)
 check('pinned return not on sale → no price', await p.getCheapestFare({ ...base, outboundFlights: ['AS326'], returnFlights: ['AS999'] }), null)

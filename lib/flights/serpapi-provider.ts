@@ -221,8 +221,20 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     // left unpinned — see pinnedFareScope (shared with the API).
     const scope = pinnedFareScope(outPin, retPin, !!params.returnDate)
 
+    // Like for like: a rival may have no more stops than the pinned
+    // outbound. The search above runs without a stop limit (the pin decides
+    // what's priced), so without this a pinned nonstop drew "cheaper
+    // elsewhere" from a one-stop fare — SFO→PVR AS 679 vs American's $408
+    // connection, 10/23 — while the same trip watched as "nonstop only"
+    // (stop limit in the search itself) showed no rival.
+    const pinnedStops = outPin.length - 1
     const rival = all
-      .filter((it) => !isAlaska(it) && it.price! < priced.price!)
+      .filter(
+        (it) =>
+          !isAlaska(it) &&
+          it.price! < priced.price! &&
+          (it.flights?.length ?? Number.MAX_SAFE_INTEGER) - 1 <= pinnedStops
+      )
       .sort(compareItineraries)[0]
 
     return toResult(priced, rival ?? null, scope)
