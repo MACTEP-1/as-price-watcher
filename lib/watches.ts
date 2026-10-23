@@ -44,10 +44,10 @@ function oneItinerary(v: Itinerary | Itinerary[] | null): Itinerary | null {
  * Every watch for a user, with its itinerary flattened in and recent price
  * history attached.
  *
- * Two queries rather than one: PostgREST can nest itineraries into watches
- * cheaply, but price history is fetched separately and joined in memory so
- * that a watch with hundreds of checks doesn't multiply rows across the
- * result set.
+ * PostgREST nests itineraries into watches cheaply; price history is
+ * fetched separately, per itinerary and bounded (see below), so a watch
+ * with hundreds of checks neither multiplies rows across the result set
+ * nor pushes anyone's newest prices past the 1000-row response cap.
  */
 export async function getWatchesWithPrices(
   supabase: any,
@@ -72,29 +72,58 @@ export async function getWatchesWithPrices(
   // whole point of the itinerary table.
   const itineraryIds = [...new Set(watches.map((w) => w.itinerary_id))]
 
-  const { data: checkRows, error: checkError } = await supabase
-    .from('price_checks')
-    .select('*')
-    .in('itinerary_id', itineraryIds)
-    .order('checked_at', { ascending: true })
-
-  if (checkError) throw new Error(checkError.message)
-
-  const checks = (checkRows ?? []) as PriceCheck[]
-
-  // Bucket once, rather than filtering the full array per watch.
-  const byItinerary = new Map<string, PriceCheck[]>()
-  for (const c of checks) {
-    const list = byItinerary.get(c.itinerary_id)
-    if (list) list.push(c)
-    else byItinerary.set(c.itinerary_id, [c])
-  }
+  // Per itinerary, in parallel: its newest SPARKLINE_POINTS checks, plus
+  // exact counts of own checks and Google-history days.
+  //
+  // This used to be ONE query for every check of every itinerary, oldest
+  // first and with no limit. PostgREST returns at most 1000 rows per
+  // request, so past that the NEWEST rows were the ones cut off — cards
+  // would quietly show stale prices with no error. Each all-Alaska watch
+  // now brings ~60 days of seeded history (migration 011), so about 15
+  // watches' worth of rows would have hit it. The card only ever needs the
+  // last few points and two counts, so ask for exactly that: bounded no
+  // matter how long a watch runs. (Same newest-first-then-reverse shape as
+  // getWatchDetail and the cron, fixed 2026-10-22.)
+  const perItinerary = await Promise.all(
+    itineraryIds.map(async (itineraryId) => {
+      const [recent, own, google] = await Promise.all([
+        supabase
+          .from('price_checks')
+          .select('*')
+          .eq('itinerary_id', itineraryId)
+          .order('checked_at', { ascending: false })
+          .limit(SPARKLINE_POINTS),
+        supabase
+          .from('price_checks')
+          .select('id', { count: 'exact', head: true })
+          .eq('itinerary_id', itineraryId)
+          .eq('source', 'check'),
+        supabase
+          .from('price_checks')
+          .select('id', { count: 'exact', head: true })
+          .eq('itinerary_id', itineraryId)
+          .eq('source', 'google_history'),
+      ])
+      for (const r of [recent, own, google]) {
+        if (r.error) throw new Error(r.error.message)
+      }
+      return [
+        itineraryId,
+        {
+          history: ((recent.data ?? []) as PriceCheck[]).reverse(),
+          counts: { own: own.count ?? 0, google: google.count ?? 0 },
+        },
+      ] as const
+    })
+  )
+  const byItinerary = new Map(perItinerary)
 
   return watches
     .filter((w) => oneItinerary(w.itineraries) !== null)
     .map((w) => {
       const itin = oneItinerary(w.itineraries) as Itinerary
-      const history = byItinerary.get(w.itinerary_id) ?? []
+      const entry = byItinerary.get(w.itinerary_id)
+      const history = entry?.history ?? []
       const latest = history[history.length - 1]
       const prev = history[history.length - 2]
 
@@ -119,13 +148,10 @@ export async function getWatchesWithPrices(
         latest_miles: latest?.miles_price ?? null,
         prev_cash: prev?.cash_price ?? null,
         prev_miles: prev?.miles_price ?? null,
-        price_history: history.slice(-SPARKLINE_POINTS),
-        // Counted over the FULL history: the card's "N checks" line used to
-        // count the trimmed sparkline slice, so it never said more than 14.
-        check_counts: {
-          own: history.filter((c) => c.source !== 'google_history').length,
-          google: history.filter((c) => c.source === 'google_history').length,
-        },
+        price_history: history,
+        // Counted by the database over the FULL history, not from the
+        // trimmed sparkline points above.
+        check_counts: entry?.counts ?? { own: 0, google: 0 },
       }
     })
 }
