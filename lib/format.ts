@@ -373,7 +373,8 @@ export function formatStopLimit(maxStops: number | null | undefined): string | n
 
 /**
  * What the MILES figure actually covers, as a label suffix: " · one-way",
- * " · any stops", " · one-way · any stops", or "".
+ * " · any stops" (or " · any flight" on a pinned watch), combinations of
+ * those, or "".
  *
  * - one-way: seats.aero is only ever asked about origin→destination on the
  *   depart date, even for a round trip (see 036f772)
@@ -386,9 +387,14 @@ export function formatStopLimit(maxStops: number | null | undefined): string | n
 export function milesScope(watch: {
   return_date: string | null
   max_stops?: number | null
+  outbound_flights?: string[] | null
 }): string {
   const parts: string[] = []
   if (watch.return_date) parts.push('one-way')
-  if (watch.max_stops != null) parts.push('any stops')
+  // A pinned watch has max_stops null (the flights decide the stops), but
+  // seats.aero is still asked about the whole route, not those flights —
+  // so its miles price can be for any flight that day.
+  if (watch.outbound_flights?.length) parts.push('any flight')
+  else if (watch.max_stops != null) parts.push('any stops')
   return parts.map((p) => ` · ${p}`).join('')
 }

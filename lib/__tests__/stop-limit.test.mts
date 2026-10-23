@@ -69,6 +69,9 @@ check('milesScope: round trip → one-way', milesScope({ return_date: '2026-11-1
 check('milesScope: stop limit → any stops (miles unfiltered)', milesScope({ return_date: null, max_stops: 0 }), ' · any stops')
 check('milesScope: both', milesScope({ return_date: '2026-11-15', max_stops: 1 }), ' · one-way · any stops')
 check('milesScope: max_stops absent (older shape) → treated as any', milesScope({ return_date: null }), '')
+check('milesScope: pinned one-way → any flight (seats.aero ignores the pin)', milesScope({ return_date: null, max_stops: null, outbound_flights: ['AS679'] }), ' · any flight')
+check('milesScope: pinned round trip → one-way · any flight', milesScope({ return_date: '2026-12-08', max_stops: null, outbound_flights: ['AS679'] }), ' · one-way · any flight')
+check('milesScope: empty pin list → falls back to stop limit', milesScope({ return_date: null, max_stops: 0, outbound_flights: [] }), ' · any stops')
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')
 process.exit(failures ? 1 : 0)

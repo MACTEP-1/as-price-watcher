@@ -5,6 +5,7 @@
 
 import { Resend } from 'resend'
 import type { CabinClass } from '@/types'
+import { formatWatchLimits, milesScope } from './format'
 
 /**
  * The email only needs the journey, not the subscription. Since route and
@@ -19,6 +20,12 @@ export interface AlertEmailWatch {
   depart_date: string
   return_date: string | null
   cabin_class: CabinClass
+  // What the watch is limited to, so the email says which fare it is
+  // talking about: "AS 679 / AS 268 only" or "nonstop only". Optional so
+  // any caller that can't supply them still sends a (less specific) email.
+  max_stops?: number | null
+  outbound_flights?: string[] | null
+  return_flights?: string[] | null
 }
 import type { AlertTrigger } from './alerts'
 import { formatDrop } from './alerts'
@@ -74,7 +81,18 @@ function alertHeadline(trigger: AlertTrigger, watch: AlertEmailWatch): string {
   return `📉 Price dropped ${dropStr}: ${route} on ${watch.depart_date}`
 }
 
-function buildEmailHtml(params: {
+/** "2026-12-01 → 2026-12-08 · economy · AS 679 / AS 268 only" — the line under the route. */
+export function tripDetailLine(watch: AlertEmailWatch): string {
+  const dates = `${watch.depart_date}${watch.return_date ? ` → ${watch.return_date}` : ' (one-way)'}`
+  const limits = formatWatchLimits({
+    max_stops: watch.max_stops ?? null,
+    outbound_flights: watch.outbound_flights,
+    return_flights: watch.return_flights,
+  })
+  return [dates, watch.cabin_class.replace('_', ' '), limits].filter(Boolean).join(' · ')
+}
+
+export function buildEmailHtml(params: {
   watch: AlertEmailWatch
   trigger: AlertTrigger
   alertId: string
@@ -114,7 +132,7 @@ function buildEmailHtml(params: {
   const milesRow =
     trigger.milesPrice !== null
       ? `<tr>
-          <td style="padding:8px 16px;color:#6b7280;">Miles price</td>
+          <td style="padding:8px 16px;color:#6b7280;">Miles price${milesScope({ return_date: watch.return_date, max_stops: watch.max_stops ?? null, outbound_flights: watch.outbound_flights })}</td>
           <td style="padding:8px 16px;font-weight:600;color:#111827;">${formatMiles(trigger.milesPrice)}</td>
           <td style="padding:8px 16px;color:#6b7280;">${trigger.baselineMilesPrice !== null ? `${baselineLabel} ${formatMiles(trigger.baselineMilesPrice)}` : ''}</td>
         </tr>`
@@ -140,7 +158,7 @@ function buildEmailHtml(params: {
         <tr>
           <td style="background:#f0f9ff;padding:20px 32px;border-bottom:1px solid #e0f2fe;">
             <span style="font-size:22px;font-weight:700;color:#0369a1;">${route}</span>
-            <span style="margin-left:12px;color:#64748b;font-size:14px;">${watch.depart_date}${watch.return_date ? ` → ${watch.return_date}` : ' (one-way)'} · ${watch.cabin_class.replace('_', ' ')}</span>
+            <span style="margin-left:12px;color:#64748b;font-size:14px;">${tripDetailLine(watch)}</span>
           </td>
         </tr>
 
