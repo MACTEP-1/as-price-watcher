@@ -163,8 +163,11 @@ export function formatItineraryLine(check: {
  * Replaces the old "return not priced separately", which hid that.
  */
 export function formatReturnNote(
-  check: { fare_scope?: string | null } | null | undefined
+  check: { fare_scope?: string | null } | null | undefined,
+  watch?: { return_flights?: string[] | null }
 ): string {
+  // A pinned return (migration 012) is known exactly — say which flight.
+  if (watch?.return_flights?.length) return `return ${formatFlightList(watch.return_flights)}`
   return check?.fare_scope === 'alaska_only' ? 'return on Alaska' : 'return may be another airline'
 }
 
@@ -264,6 +267,102 @@ export function formatCompetitorLine(check: {
  * "up to 1 stop", "up to 2 stops" — or null for the default (any), which
  * isn't worth printing. See migration 006.
  */
+/**
+ * Pinned flights (migration 012). Reads what a person types — "AS 326",
+ * "as326", "AS 623, AS 625", "AS623 + AS625" — into ['AS326'] /
+ * ['AS623','AS625']. Empty input → [] (not pinned). Anything it can't
+ * read → null, so the form can say so instead of guessing.
+ */
+export function parseFlightList(input: string): string[] | null {
+  const text = input.toUpperCase().trim()
+  if (!text) return []
+  const flights: string[] = []
+  const rest = text.replace(/([A-Z][A-Z0-9]|[0-9][A-Z])\s*(\d{1,4})/g, (_m, carrier: string, num: string) => {
+    flights.push(`${carrier}${num}`)
+    return ' '
+  })
+  if (/[^\s,+/>&-]/.test(rest) || flights.length === 0 || flights.length > 4) return null
+  return flights
+}
+
+/** Server-side check of a pinned-flight list sent by a form: normalised list, null (absent) or 'invalid'. */
+export function normaliseFlightList(value: unknown): string[] | null | 'invalid' {
+  if (value === undefined || value === null) return null
+  if (!Array.isArray(value)) return 'invalid'
+  if (value.length === 0) return null
+  if (value.length > 4) return 'invalid'
+  const out: string[] = []
+  for (const v of value) {
+    if (typeof v !== 'string') return 'invalid'
+    const f = v.replace(/\s+/g, '').toUpperCase()
+    if (!/^([A-Z][A-Z0-9]|[0-9][A-Z])\d{1,4}$/.test(f)) return 'invalid'
+    out.push(f)
+  }
+  return out
+}
+
+/**
+ * What a pinned watch's price is (migration 010 terms): all-Alaska only
+ * when every pinned flight is Alaska AND nothing is left unpinned — on a
+ * round trip with only the outbound pinned, the return could be anyone.
+ * Shared by the API (itinerary identity) and the provider (row label).
+ */
+export function pinnedFareScope(
+  outbound: string[],
+  ret: string[] | null | undefined,
+  isRoundTrip: boolean
+): 'alaska_only' | 'alaska_leg' {
+  const all = [...outbound, ...(ret ?? [])]
+  const allAlaska = all.length > 0 && all.every((f) => /^AS\d/i.test(f))
+  return allAlaska && (!isRoundTrip || !!ret?.length) ? 'alaska_only' : 'alaska_leg'
+}
+
+/**
+ * "Watch just this flight" on a watch's detail page: the new-watch form's
+ * pre-fill, taken from the flight the latest check found (all outbound
+ * legs). Null when no flight is known. The return flight is never known
+ * (only outbound flights are fetched), so the form leaves it for the user.
+ */
+export function pinPrefillParams(
+  w: { origin: string; destination: string; depart_date: string; return_date: string | null; cabin_class: string },
+  check: { flight_number: string | null; legs?: { flight: string | null }[] | null } | null | undefined
+): Record<string, string> | null {
+  const legFlights = (check?.legs ?? []).map((l) => l.flight).filter((f): f is string => !!f)
+  const flights = legFlights.length ? legFlights : check?.flight_number ? [check.flight_number] : []
+  if (!flights.length) return null
+  const p: Record<string, string> = {
+    from: w.origin,
+    to: w.destination,
+    depart: w.depart_date,
+    cabin: w.cabin_class,
+    out: formatFlightList(flights),
+  }
+  if (w.return_date) p.return = w.return_date
+  return p
+}
+
+/** ['AS623','AS625'] → "AS 623 + AS 625". */
+export function formatFlightList(flights: string[] | null | undefined): string {
+  return (flights ?? []).map((f) => formatFlightNumber(f) ?? f).join(' + ')
+}
+
+/**
+ * The short limit shown after a watch's dates: the pinned flights
+ * ("AS 326 / AS 325 only") when there are any — they decide everything
+ * else — otherwise the stop limit ("nonstop only"), or null.
+ */
+export function formatWatchLimits(w: {
+  max_stops: number | null
+  outbound_flights?: string[] | null
+  return_flights?: string[] | null
+}): string | null {
+  if (w.outbound_flights?.length) {
+    const back = w.return_flights?.length ? ` / ${formatFlightList(w.return_flights)}` : ''
+    return `${formatFlightList(w.outbound_flights)}${back} only`
+  }
+  return formatStopLimit(w.max_stops)
+}
+
 export function formatStopLimit(maxStops: number | null | undefined): string | null {
   if (maxStops == null) return null
   if (maxStops === 0) return 'nonstop only'

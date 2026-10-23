@@ -1,4 +1,4 @@
--- AS Price Watcher — Supabase schema (canonical, current through migration 011)
+-- AS Price Watcher — Supabase schema (canonical, current through migration 012)
 --
 -- For a FRESH database, run this file.
 -- For an EXISTING one, run the files in supabase/migrations/ in order
@@ -80,6 +80,11 @@ create table if not exists itineraries (
   fare_scope    text not null default 'alaska_leg'
                   constraint itineraries_fare_scope_check
                   check (fare_scope in ('alaska_leg', 'alaska_only')),
+  -- Pinned flights (migration 012): exact flight numbers to price, in
+  -- order, e.g. {AS326} or {AS623,AS625}. NULL = cheapest trip, as before.
+  -- Part of the identity.
+  outbound_flights text[],
+  return_flights   text[],
   created_at    timestamptz not null default now()
 );
 
@@ -90,7 +95,9 @@ create table if not exists itineraries (
 create unique index if not exists itineraries_unique_idx
   on itineraries (origin, destination, depart_date,
                   coalesce(return_date, 'infinity'::date), cabin_class,
-                  coalesce(max_stops, -1), fare_scope);
+                  coalesce(max_stops, -1), fare_scope,
+                  coalesce(outbound_flights, '{}'::text[]),
+                  coalesce(return_flights, '{}'::text[]));
 
 alter table itineraries enable row level security;
 
@@ -256,7 +263,9 @@ create or replace function find_or_create_itinerary(
   p_return_date date,
   p_cabin_class text,
   p_max_stops   integer default null,
-  p_fare_scope  text    default 'alaska_leg'   -- migration 010; new watches pass 'alaska_only'
+  p_fare_scope  text    default 'alaska_leg',  -- migration 010; new watches pass 'alaska_only'
+  p_outbound_flights text[] default null,    -- migration 012
+  p_return_flights   text[] default null
 ) returns uuid
 language plpgsql
 security definer
@@ -272,14 +281,16 @@ begin
      and coalesce(return_date, 'infinity'::date) = coalesce(p_return_date, 'infinity'::date)
      and cabin_class = p_cabin_class
      and coalesce(max_stops, -1) = coalesce(p_max_stops, -1)
-     and fare_scope = p_fare_scope;
+     and fare_scope = p_fare_scope
+     and coalesce(outbound_flights, '{}'::text[]) = coalesce(p_outbound_flights, '{}'::text[])
+     and coalesce(return_flights, '{}'::text[]) = coalesce(p_return_flights, '{}'::text[]);
 
   if v_id is not null then
     return v_id;
   end if;
 
-  insert into itineraries (origin, destination, depart_date, return_date, cabin_class, max_stops, fare_scope)
-  values (p_origin, p_destination, p_depart_date, p_return_date, p_cabin_class, p_max_stops, p_fare_scope)
+  insert into itineraries (origin, destination, depart_date, return_date, cabin_class, max_stops, fare_scope, outbound_flights, return_flights)
+  values (p_origin, p_destination, p_depart_date, p_return_date, p_cabin_class, p_max_stops, p_fare_scope, p_outbound_flights, p_return_flights)
   returning id into v_id;
 
   return v_id;
@@ -292,7 +303,9 @@ exception when unique_violation then
      and coalesce(return_date, 'infinity'::date) = coalesce(p_return_date, 'infinity'::date)
      and cabin_class = p_cabin_class
      and coalesce(max_stops, -1) = coalesce(p_max_stops, -1)
-     and fare_scope = p_fare_scope;
+     and fare_scope = p_fare_scope
+     and coalesce(outbound_flights, '{}'::text[]) = coalesce(p_outbound_flights, '{}'::text[])
+     and coalesce(return_flights, '{}'::text[]) = coalesce(p_return_flights, '{}'::text[]);
   return v_id;
 end;
 $$;
@@ -301,8 +314,8 @@ $$;
 -- new functions to anon/authenticated/service_role directly, so revoking
 -- from public alone left logged-out callers able to run this SECURITY
 -- DEFINER function (found live 2026-09-24, fixed in migration 006).
-revoke all on function find_or_create_itinerary(text,text,date,date,text,integer,text) from public, anon;
-grant execute on function find_or_create_itinerary(text,text,date,date,text,integer,text) to authenticated, service_role;
+revoke all on function find_or_create_itinerary(text,text,date,date,text,integer,text,text[],text[]) from public, anon;
+grant execute on function find_or_create_itinerary(text,text,date,date,text,integer,text,text[],text[]) to authenticated, service_role;
 
 -- ─────────────────────────────────────────────
 -- Indexes

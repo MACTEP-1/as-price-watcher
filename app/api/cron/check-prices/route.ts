@@ -241,6 +241,9 @@ async function runPriceCheck(): Promise<NextResponse> {
           maxStops: itinerary.max_stops,
           // 'alaska_only' runs two searches — see the provider.
           fareScope: itinerary.fare_scope,
+          // Pinned flights (migration 012) override both of the above.
+          outboundFlights: itinerary.outbound_flights ?? null,
+          returnFlights: itinerary.return_flights ?? null,
         }),
         getCheapestMilesPrice({
           origin: itinerary.origin,

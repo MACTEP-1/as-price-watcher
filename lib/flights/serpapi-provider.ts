@@ -19,6 +19,7 @@
  */
 
 import type { FlightPriceProvider, FlightSearchParams, CashFareResult } from './types'
+import { pinnedFareScope } from '../format'
 
 const SERPAPI_URL = 'https://serpapi.com/search'
 
@@ -43,6 +44,18 @@ interface SerpItinerary {
   total_duration?: number
   flights?: SerpFlightLeg[]
   layovers?: unknown[]
+  /** Round trips: pass back to list this outbound's return options. */
+  departure_token?: string
+}
+
+/**
+ * Does this itinerary fly exactly these flights, in this order? Compared
+ * without spaces and case-insensitively: SerpApi writes "AS 326", pins
+ * are stored "AS326".
+ */
+function sameFlights(itin: SerpItinerary, pin: string[]): boolean {
+  const flights = (itin.flights ?? []).map((l) => (l.flight_number ?? '').replace(/\s+/g, '').toUpperCase())
+  return flights.length === pin.length && flights.every((f, i) => f === pin[i].toUpperCase())
 }
 
 /** `flight_number` comes back as "AS 1234". Marketing carrier = the prefix. */
@@ -108,6 +121,8 @@ function compareItineraries(a: SerpItinerary, b: SerpItinerary): number {
 
 export class SerpApiFlightProvider implements FlightPriceProvider {
   async getCheapestFare(params: FlightSearchParams): Promise<CashFareResult | null> {
+    if (params.outboundFlights?.length) return this.getPinnedFare(params)
+
     if (params.fareScope !== 'alaska_only') {
       const { itineraries: all } = await this.search(params)
       return all.length ? pickAlaskaLeg(all) : null
@@ -162,11 +177,67 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
   }
 
   /**
+   * Pinned flights (migration 012, user's request 10/23): price EXACTLY
+   * the flights asked for, never a substitute.
+   *
+   * One unfiltered search (no stop limit — the flights decide), then the
+   * itinerary whose outbound flight numbers match the pin in order. Its
+   * `price` is already a round-trip total, paired with Google's cheapest
+   * return — right when only the outbound is pinned. When the return is
+   * pinned too, a second call with that itinerary's departure_token lists
+   * the returns, each priced as the full round trip, and the match is the
+   * price. 1 search, or 2 with a pinned return.
+   *
+   * Pinned flight not on sale that day (sold out, cancelled, schedule
+   * change) → null: the check stores no price rather than another
+   * flight's. The rival is the cheapest itinerary with no Alaska leg, as
+   * for all-Alaska watches. No priceHistory: Google's history for an
+   * unfiltered search is any airline's cheapest fare, not this flight.
+   */
+  private async getPinnedFare(params: FlightSearchParams): Promise<CashFareResult | null> {
+    const outPin = params.outboundFlights!
+    const retPin = params.returnDate && params.returnFlights?.length ? params.returnFlights : null
+    const { itineraries: all } = await this.search({ ...params, maxStops: null })
+
+    const outbound = all.find((it) => sameFlights(it, outPin))
+    if (!outbound) return null
+
+    let priced: SerpItinerary = outbound
+    if (retPin) {
+      if (!outbound.departure_token) return null
+      const { itineraries: returns } = await this.search(
+        { ...params, maxStops: null },
+        undefined,
+        outbound.departure_token
+      )
+      const ret = returns.find((it) => sameFlights(it, retPin))
+      if (!ret) return null
+      // The return listing's price is the whole round trip for this pair;
+      // the legs/duration we keep describing the OUTBOUND, as everywhere.
+      priced = { ...outbound, price: ret.price }
+    }
+
+    // 'alaska_only' only when every pinned flight is Alaska and nothing is
+    // left unpinned — see pinnedFareScope (shared with the API).
+    const scope = pinnedFareScope(outPin, retPin, !!params.returnDate)
+
+    const rival = all
+      .filter((it) => !isAlaska(it) && it.price! < priced.price!)
+      .sort(compareItineraries)[0]
+
+    return toResult(priced, rival ?? null, scope)
+  }
+
+  /**
    * One SerpApi Google Flights request. Returns every priced itinerary
    * (best_flights + other_flights), [] when Google has no results, and
    * throws on anything else (quota, HTTP, timeout).
    */
-  private async search(params: FlightSearchParams, includeAirlines?: string): Promise<SearchResult> {
+  private async search(
+    params: FlightSearchParams,
+    includeAirlines?: string,
+    departureToken?: string
+  ): Promise<SearchResult> {
     const apiKey = process.env.SERPAPI_KEY
     if (!apiKey) throw new Error('SERPAPI_KEY env var is not set')
 
@@ -199,6 +270,10 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     // only itineraries whose every flight is Alaska — the round trip
     // alaskaair.com itself would sell.
     if (includeAirlines) query.set('include_airlines', includeAirlines)
+
+    // Round trips: list the RETURN options for one chosen outbound — each
+    // priced as the full round trip (pinned return flights, migration 012).
+    if (departureToken) query.set('departure_token', departureToken)
 
     // Keep the request inside the cron's 30s budget.
     //

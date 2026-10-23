@@ -5,7 +5,7 @@ import { getWatchDetail } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatCheckCount, formatStopLimit, milesScope } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatCheckCount, formatWatchLimits, pinPrefillParams, milesScope } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
@@ -62,7 +62,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
               : ' · one-way'}
             {' · '}
             <span style={{ textTransform: 'capitalize' }}>{watch.cabin_class.replace('_', ' ')}</span>
-            {formatStopLimit(watch.max_stops) && ` · ${formatStopLimit(watch.max_stops)}`}
+            {formatWatchLimits(watch) && ` · ${formatWatchLimits(watch)}`}
           </p>
         </div>
 
@@ -86,7 +86,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
               <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>
                 {watch.return_date ? 'Outbound: ' : 'Best: '}
                 {formatItineraryLine(latest)}
-                {watch.return_date ? ` · ${formatReturnNote(latest)}` : ''}
+                {watch.return_date ? ` · ${formatReturnNote(latest, watch)}` : ''}
               </p>
             )}
             {formatCompetitorLine(latest) && (
@@ -103,6 +103,20 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
               >
                 View on Google Flights ↗
               </a>
+              {/* Quiet way into pinned flights (migration 012): a new watch
+                  pre-filled with the flight this one found. Hidden on a
+                  watch that's already pinned. */}
+              {!watch.outbound_flights?.length && pinPrefillParams(watch, latest) && (
+                <>
+                  <span style={{ color: '#cbd5e1' }}> · </span>
+                  <Link
+                    href={`/watches/new?${new URLSearchParams(pinPrefillParams(watch, latest)!)}`}
+                    style={{ color: '#64748b', textDecoration: 'none' }}
+                  >
+                    Watch just this flight
+                  </Link>
+                </>
+              )}
             </p>
           </div>
 

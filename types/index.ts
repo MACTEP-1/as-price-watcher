@@ -44,6 +44,10 @@ export interface Itinerary {
   max_stops: number | null
   // Migration 010 — see ItineraryFareScope. Part of the identity.
   fare_scope: ItineraryFareScope
+  // Migration 012: exact flights to price, e.g. ['AS326'] or
+  // ['AS623','AS625']; null = cheapest trip. Part of the identity.
+  outbound_flights?: string[] | null
+  return_flights?: string[] | null
   created_at: string
 }
 
@@ -139,6 +143,10 @@ export interface WatchWithLatestPrice {
   // Stop limit (migration 006): null = any, 0 = nonstop only, 1 = up to 1
   // stop, 2 = up to 2 stops. Part of the itinerary's identity.
   max_stops: number | null
+  // Pinned flights (migration 012) — null when the watch prices the
+  // cheapest trip.
+  outbound_flights?: string[] | null
+  return_flights?: string[] | null
 
   latest_cash: number | null
   latest_miles: number | null

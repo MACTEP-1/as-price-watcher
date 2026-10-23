@@ -11,6 +11,14 @@ export interface FlightSearchParams {
   maxStops?: number | null
   /** Which kind of price to track (migration 010). Absent = 'alaska_leg'. */
   fareScope?: ItineraryFareScope
+  /**
+   * Pinned flights (migration 012): price exactly these outbound flights,
+   * and on a round trip, if given, exactly these return flights. Flight
+   * numbers without spaces, in order ('AS623','AS625' for a connection).
+   * When set, maxStops and fareScope don't choose anything — the flights do.
+   */
+  outboundFlights?: string[] | null
+  returnFlights?: string[] | null
 }
 
 export interface CashFareResult {

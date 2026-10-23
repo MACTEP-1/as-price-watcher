@@ -28,7 +28,7 @@ import {
   formatCompetitorLine,
   formatReturnNote,
   formatCheckCount,
-  formatStopLimit,
+  formatWatchLimits,
   milesScope,
   pctChange,
   formatPctChange,
@@ -149,7 +149,7 @@ export default function DashboardScreen() {
                   <Text style={styles.metaCabin}>
                     {item.cabin_class.replace('_', ' ')}
                   </Text>
-                  {formatStopLimit(item.max_stops) ? ` · ${formatStopLimit(item.max_stops)}` : ''}
+                  {formatWatchLimits(item) ? ` · ${formatWatchLimits(item)}` : ''}
                 </Text>
 
                 <View style={styles.grid}>
@@ -213,7 +213,7 @@ export default function DashboardScreen() {
               {!!itineraryLine && (
                 <Text style={styles.itineraryLine}>
                   {isRoundTrip
-                    ? `Outbound ${itineraryLine} · ${formatReturnNote(latestCheck)}`
+                    ? `Outbound ${itineraryLine} · ${formatReturnNote(latestCheck, item)}`
                     : itineraryLine}
                 </Text>
               )}

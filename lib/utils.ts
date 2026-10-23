@@ -24,6 +24,11 @@ export {
   formatCheckCount,
   FARE_SCOPE_OPTIONS,
   fareScopeHint,
+  parseFlightList,
+  formatFlightList,
+  formatWatchLimits,
+  pinnedFareScope,
+  pinPrefillParams,
   formatStopLimit,
   milesScope,
 } from './format'

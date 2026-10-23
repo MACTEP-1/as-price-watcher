@@ -21,7 +21,8 @@ import {
   formatCompetitorLine,
   formatReturnNote,
   formatCheckCount,
-  formatStopLimit,
+  formatWatchLimits,
+  pinPrefillParams,
   milesScope,
   pctChange,
   formatPctChange,
@@ -150,7 +151,7 @@ export default function WatchDetailScreen() {
           {watch.return_date ? ` – ${formatDate(watch.return_date)}` : ' · one-way'}
           {' · '}
           <Text style={styles.metaCabin}>{watch.cabin_class.replace('_', ' ')}</Text>
-          {formatStopLimit(watch.max_stops) ? ` · ${formatStopLimit(watch.max_stops)}` : ''}
+          {formatWatchLimits(watch) ? ` · ${formatWatchLimits(watch)}` : ''}
         </Text>
 
         <View style={styles.grid}>
@@ -195,7 +196,7 @@ export default function WatchDetailScreen() {
           <Text style={styles.itineraryLine}>
             {watch.return_date ? 'Outbound: ' : 'Best: '}
             {formatItineraryLine(latest)}
-            {watch.return_date ? ` · ${formatReturnNote(latest)}` : ''}
+            {watch.return_date ? ` · ${formatReturnNote(latest, watch)}` : ''}
           </Text>
         )}
 
@@ -211,6 +212,19 @@ export default function WatchDetailScreen() {
         >
           <Text style={styles.linkOut}>View on Google Flights ↗</Text>
         </Pressable>
+
+        {/* Quiet way into pinned flights (migration 012): a new watch
+            pre-filled with the flight this one found. */}
+        {!watch.outbound_flights?.length && !!pinPrefillParams(watch, latest) && (
+          <Pressable
+            hitSlop={8}
+            onPress={() =>
+              router.push({ pathname: '/watches/new', params: pinPrefillParams(watch, latest)! })
+            }
+          >
+            <Text style={styles.pinLink}>Watch just this flight</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Directly under the cash/miles card rather than at the bottom of the
@@ -391,6 +405,7 @@ const styles = StyleSheet.create({
   removeText: { color: '#dc2626', fontSize: 14, fontWeight: '600' },
   competitorLine: { fontSize: 12, color: '#b45309', marginTop: 6 },
   linkOut: { fontSize: 13, color: '#0060ac', fontWeight: '600', marginTop: 10 },
+  pinLink: { fontSize: 12, color: '#64748b', marginTop: 8 },
   metaCabin: { textTransform: 'capitalize' },
   grid: { marginTop: 18, flexDirection: 'row', gap: 20 },
   col: { flex: 1 },

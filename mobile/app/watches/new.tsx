@@ -4,13 +4,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { createWatch } from '../../lib/api'
 import DatePickerField from '../../components/DatePickerField'
 import AirportAutocomplete from '../../components/AirportAutocomplete'
-import { FARE_SCOPE_OPTIONS, fareScopeHint } from '../../../lib/format'
+import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList } from '../../../lib/format'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy' },
@@ -71,14 +72,22 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
  */
 export default function NewWatchScreen() {
   const router = useRouter()
-  const [tripType, setTripType] = useState<TripType>('one_way')
+  // Pre-fill from a watch screen's "Watch just this flight" (migration 012).
+  const prefill = useLocalSearchParams<{
+    from?: string; to?: string; depart?: string; return?: string; cabin?: string; out?: string
+  }>()
+  const [tripType, setTripType] = useState<TripType>(prefill.return ? 'round_trip' : 'one_way')
   const [form, setForm] = useState({
-    origin: '',
-    destination: '',
-    departDate: '',
-    returnDate: '',
-    cabinClass: 'economy' as string,
+    origin: prefill.from ?? '',
+    destination: prefill.to ?? '',
+    departDate: prefill.depart ?? '',
+    returnDate: prefill.return ?? '',
+    cabinClass: (prefill.cabin ?? 'economy') as string,
   })
+  // Pinned flights — behind a small link unless pre-filled.
+  const [showPins, setShowPins] = useState(!!prefill.out)
+  const [pinOut, setPinOut] = useState(prefill.out ?? '')
+  const [pinRet, setPinRet] = useState('')
   const [maxStops, setMaxStops] = useState<number | null>(null)
   const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>('alaska_only')
   const [loading, setLoading] = useState(false)
@@ -131,6 +140,17 @@ export default function NewWatchScreen() {
       }
     }
 
+    const outboundFlights = parseFlightList(pinOut)
+    const returnFlights = isRoundTrip ? parseFlightList(pinRet) : []
+    if (outboundFlights === null || returnFlights === null) {
+      setError("Couldn't read the flight numbers — use e.g. AS 326, or AS 623, AS 625 for a connection.")
+      return
+    }
+    if (returnFlights.length && !outboundFlights.length) {
+      setError('Add the outbound flight too, or clear the return flight.')
+      return
+    }
+
     setLoading(true)
     try {
       const watch = await createWatch({
@@ -141,6 +161,8 @@ export default function NewWatchScreen() {
         cabinClass: form.cabinClass,
         maxStops,
         fareScope,
+        outboundFlights: outboundFlights.length ? outboundFlights : null,
+        returnFlights: returnFlights.length ? returnFlights : null,
       })
       router.replace(`/watches/${watch.id}`)
     } catch (err) {
@@ -309,6 +331,54 @@ export default function NewWatchScreen() {
         })}
       </View>
       <Text style={styles.fieldHint}>{fareScopeHint(fareScope, isRoundTrip)}</Text>
+
+      {/* Pinned flights — a small link until used. */}
+      {!showPins ? (
+        <Pressable onPress={() => setShowPins(true)} hitSlop={8}>
+          <Text style={styles.pinLink}>Specific flights (optional)</Text>
+        </Pressable>
+      ) : (
+        <>
+          <Text style={styles.label}>Specific flights</Text>
+          <View style={styles.row}>
+            <TextInput
+              value={pinOut}
+              onChangeText={setPinOut}
+              placeholder="Outbound, e.g. AS 326"
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={[styles.pinInput, isRoundTrip ? styles.half : styles.full]}
+            />
+            {isRoundTrip && (
+              <TextInput
+                value={pinRet}
+                onChangeText={setPinRet}
+                placeholder="Return (optional)"
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={[styles.pinInput, styles.half]}
+              />
+            )}
+          </View>
+          <Text style={styles.fieldHint}>
+            Only these flights are priced; Stops and Airlines are ignored. If they aren't on sale that
+            day, no price is recorded. A connection: AS 623, AS 625.
+            {isRoundTrip ? ' No return flight = the cheapest return with that outbound.' : ''}
+          </Text>
+          <Pressable
+            onPress={() => {
+              setShowPins(false)
+              setPinOut('')
+              setPinRet('')
+            }}
+            hitSlop={8}
+          >
+            <Text style={styles.pinLink}>Clear</Text>
+          </Pressable>
+        </>
+      )}
       </View>
 
       {!!error && (
@@ -360,6 +430,17 @@ const styles = StyleSheet.create({
   },
   labelFirst: { marginTop: 0 },
   fieldHint: { fontSize: 12, color: '#94a3b8', marginTop: 6 },
+  pinLink: { fontSize: 12, color: '#0060ac', marginTop: 12 },
+  pinInput: {
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: '#0f172a',
+    backgroundColor: '#f8fafc',
+  },
   row: { flexDirection: 'row', gap: 16, marginTop: 4 },
   half: { flex: 1 },
   full: { flex: 1 },

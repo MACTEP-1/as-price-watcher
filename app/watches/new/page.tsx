@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import AirportAutocomplete from '@/components/AirportAutocomplete'
-import { FARE_SCOPE_OPTIONS, fareScopeHint } from '@/lib/format'
+import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList } from '@/lib/format'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy (Saver / Main)' },
@@ -74,7 +74,31 @@ export default function NewWatchPage() {
   })
   const [maxStops, setMaxStops] = useState<number | null>(null)
   const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>('alaska_only')
+  // Pinned flights (migration 012) — tucked behind a small link; most
+  // watches want the cheapest trip.
+  const [showPins, setShowPins] = useState(false)
+  const [pinOut, setPinOut] = useState('')
+  const [pinRet, setPinRet] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Pre-fill from a watch page's "Watch just this flight" link
+  // (?from=&to=&depart=&return=&cabin=&out=). Read from window rather than
+  // useSearchParams, which would need a Suspense boundary for this page.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (!q.get('out')) return
+    setForm((f) => ({
+      ...f,
+      origin: q.get('from') ?? f.origin,
+      destination: q.get('to') ?? f.destination,
+      departDate: q.get('depart') ?? f.departDate,
+      returnDate: q.get('return') ?? '',
+      cabinClass: q.get('cabin') ?? f.cabinClass,
+    }))
+    setTripType(q.get('return') ? 'round_trip' : 'one_way')
+    setPinOut(q.get('out') ?? '')
+    setShowPins(true)
+  }, [])
   const [error, setError] = useState('')
 
   function set(key: string, value: string) {
@@ -105,6 +129,17 @@ export default function NewWatchPage() {
       return
     }
 
+    const outboundFlights = parseFlightList(pinOut)
+    const returnFlights = isRoundTrip ? parseFlightList(pinRet) : []
+    if (outboundFlights === null || returnFlights === null) {
+      setError('Couldn\'t read the flight numbers — use e.g. AS 326, or AS 623, AS 625 for a connection.')
+      return
+    }
+    if (returnFlights.length && !outboundFlights.length) {
+      setError('Add the outbound flight too, or clear the return flight.')
+      return
+    }
+
     setLoading(true)
     setError('')
     const res = await fetch('/api/watches', {
@@ -118,6 +153,8 @@ export default function NewWatchPage() {
         cabinClass: form.cabinClass,
         maxStops,
         fareScope,
+        outboundFlights: outboundFlights.length ? outboundFlights : null,
+        returnFlights: returnFlights.length ? returnFlights : null,
       }),
     })
     const data = await res.json()
@@ -267,6 +304,51 @@ export default function NewWatchPage() {
             <p style={{ margin: '6px 0 0', fontSize: 12, color: '#94a3b8' }}>
               {fareScopeHint(fareScope, tripType === 'round_trip')}
             </p>
+          </div>
+
+          {/* Pinned flights — deliberately low-key: a small link until used. */}
+          <div>
+            {!showPins ? (
+              <button
+                type="button"
+                onClick={() => setShowPins(true)}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#0060ac', fontSize: 12, cursor: 'pointer' }}
+              >
+                Specific flights (optional)
+              </button>
+            ) : (
+              <>
+                <label style={labelStyle}>Specific flights</label>
+                <div style={{ display: 'grid', gridTemplateColumns: isRoundTrip ? '1fr 1fr' : '1fr', gap: 8 }}>
+                  <input
+                    value={pinOut}
+                    onChange={(e) => setPinOut(e.target.value)}
+                    placeholder="Outbound, e.g. AS 326"
+                    style={inputStyle}
+                  />
+                  {isRoundTrip && (
+                    <input
+                      value={pinRet}
+                      onChange={(e) => setPinRet(e.target.value)}
+                      placeholder="Return (optional)"
+                      style={inputStyle}
+                    />
+                  )}
+                </div>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#94a3b8' }}>
+                  Only these flights are priced; Stops and Airlines are ignored. If they aren&apos;t on sale
+                  that day, no price is recorded. A connection: AS 623, AS 625.
+                  {isRoundTrip && ' No return flight = the cheapest return with that outbound.'}{' '}
+                  <button
+                    type="button"
+                    onClick={() => { setShowPins(false); setPinOut(''); setPinRet('') }}
+                    style={{ background: 'none', border: 'none', padding: 0, color: '#0060ac', fontSize: 12, cursor: 'pointer' }}
+                  >
+                    Clear
+                  </button>
+                </p>
+              </>
+            )}
           </div>
 
           {error && (

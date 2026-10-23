@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatCheckCount, formatStopLimit, milesScope } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatCheckCount, formatWatchLimits, milesScope } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import PriceSparkline from './PriceSparkline'
 
@@ -66,7 +66,7 @@ export default function WatchCard({ watch }: Props) {
                 : ' · one-way'}
               {' · '}
               <span style={{ textTransform: 'capitalize' }}>{watch.cabin_class.replace('_', ' ')}</span>
-              {formatStopLimit(watch.max_stops) && ` · ${formatStopLimit(watch.max_stops)}`}
+              {formatWatchLimits(watch) && ` · ${formatWatchLimits(watch)}`}
             </p>
           </div>
           <span style={{ fontSize: 14, color: '#94a3b8', flexShrink: 0 }}>›</span>
@@ -115,7 +115,7 @@ export default function WatchCard({ watch }: Props) {
 
         {itineraryLine && (
           <p style={{ margin: '12px 0 0', fontSize: 12, color: '#94a3b8' }}>
-            {isRoundTrip ? `Outbound ${itineraryLine} · ${formatReturnNote(latestCheck)}` : itineraryLine}
+            {isRoundTrip ? `Outbound ${itineraryLine} · ${formatReturnNote(latestCheck, watch)}` : itineraryLine}
           </p>
         )}
 

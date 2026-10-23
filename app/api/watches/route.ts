@@ -4,6 +4,7 @@ import { getWatchesWithPrices } from '@/lib/watches'
 import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice } from '@/lib/miles'
 import { priceCheckRow, googleHistoryRows } from '@/lib/price-check-row'
+import { normaliseFlightList, pinnedFareScope } from '@/lib/format'
 import type { CabinClass } from '@/types'
 
 export async function GET() {
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { origin, destination, departDate, returnDate, cabinClass, maxStops, fareScope } = body
+  const { origin, destination, departDate, returnDate, cabinClass, maxStops, fareScope, outboundFlights, returnFlights } = body
 
   if (!origin || !destination || !departDate) {
     return NextResponse.json({ error: 'origin, destination, and departDate are required' }, { status: 400 })
@@ -86,6 +87,32 @@ export async function POST(req: NextRequest) {
   }
 
   /**
+   * Pinned flights (migration 012): optional exact flight numbers. They
+   * decide what's priced, so when present the stop limit is dropped and
+   * the fare scope follows from the flights themselves (pinnedFareScope) —
+   * otherwise the same pin chosen with different form settings would make
+   * duplicate itineraries that price the identical thing.
+   */
+  const pinOut = normaliseFlightList(outboundFlights)
+  const pinRet = normaliseFlightList(returnFlights)
+  if (pinOut === 'invalid' || pinRet === 'invalid') {
+    return NextResponse.json(
+      { error: 'Flights must look like "AS326" — up to 4 per direction' },
+      { status: 400 }
+    )
+  }
+  if (pinRet && (!pinOut || !normalisedReturn)) {
+    return NextResponse.json(
+      { error: 'A return flight needs a round trip and an outbound flight' },
+      { status: 400 }
+    )
+  }
+  const effectiveMaxStops = pinOut ? null : normalisedMaxStops
+  const effectiveFareScope = pinOut
+    ? pinnedFareScope(pinOut, pinRet, !!normalisedReturn)
+    : normalisedFareScope
+
+  /**
    * Find-or-create the itinerary. This is a SECURITY DEFINER function rather
    * than a direct insert: granting users INSERT on `itineraries` would let
    * anyone write arbitrary rows into a table shared by every user. The
@@ -100,10 +127,12 @@ export async function POST(req: NextRequest) {
       p_depart_date: departDate,
       p_return_date: normalisedReturn,
       p_cabin_class: cabinClass ?? 'economy',
-      p_max_stops: normalisedMaxStops,
+      p_max_stops: effectiveMaxStops,
       // All-Alaska unless the form asked otherwise (see above). A different
       // scope is a separate itinerary, never a merge.
-      p_fare_scope: normalisedFareScope,
+      p_fare_scope: effectiveFareScope,
+      p_outbound_flights: pinOut,
+      p_return_flights: pinRet,
     }
   )
 
@@ -171,8 +200,10 @@ export async function POST(req: NextRequest) {
           departDate,
           returnDate: normalisedReturn,
           cabinClass: (cabinClass ?? 'economy') as CabinClass,
-          maxStops: normalisedMaxStops,
-          fareScope: normalisedFareScope,
+          maxStops: effectiveMaxStops,
+          fareScope: effectiveFareScope,
+          outboundFlights: pinOut,
+          returnFlights: pinRet,
         }),
         getCheapestMilesPrice({
           origin,

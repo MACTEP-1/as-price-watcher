@@ -66,6 +66,9 @@ export async function createWatch(params: {
   maxStops?: number | null
   /** Migration 010: all-Alaska trip (default) or any trip with an Alaska flight. */
   fareScope?: 'alaska_only' | 'alaska_leg'
+  /** Migration 012: exact flights, e.g. ['AS326']; null = cheapest trip. */
+  outboundFlights?: string[] | null
+  returnFlights?: string[] | null
 }): Promise<{ id: string }> {
   const {
     data: { session },
