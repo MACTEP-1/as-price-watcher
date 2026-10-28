@@ -1,17 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 export default function Nav() {
-  const router = useRouter()
-  const supabase = createSupabaseBrowserClient()
-
-  async function signOut() {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
 
   return (
     <nav style={{ background: '#0060ac', color: '#fff' }}>
@@ -32,9 +23,10 @@ export default function Nav() {
           <Link href="/watches/new" style={{ fontSize: 14, fontWeight: 500, background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '6px 12px', borderRadius: 8, textDecoration: 'none' }}>
             + New watch
           </Link>
-          <button onClick={signOut} style={{ fontSize: 14, color: '#bfdbfe', background: 'none', border: 'none', cursor: 'pointer' }}>
-            Sign out
-          </button>
+          {/* Sign out lives on the Account page, next to Delete account. */}
+          <Link href="/account" style={{ fontSize: 14, fontWeight: 500, color: '#bfdbfe', textDecoration: 'none' }}>
+            Account
+          </Link>
         </div>
       </div>
     </nav>

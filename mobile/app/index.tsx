@@ -74,10 +74,6 @@ export default function DashboardScreen() {
     setRefreshing(false)
   }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-  }
-
   if (loading) {
     return (
       <View style={styles.center}>
@@ -97,8 +93,9 @@ export default function DashboardScreen() {
           <Pressable onPress={() => router.push('/watches/new')} hitSlop={8}>
             <Text style={styles.newWatch}>+ New</Text>
           </Pressable>
-          <Pressable onPress={signOut} hitSlop={8}>
-            <Text style={styles.signOut}>Sign out</Text>
+          {/* Sign out lives on the Account screen, next to Delete account. */}
+          <Pressable onPress={() => router.push('/account')} hitSlop={8}>
+            <Text style={styles.signOut}>Account</Text>
           </Pressable>
         </View>
       </View>

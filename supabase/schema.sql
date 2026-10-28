@@ -167,7 +167,9 @@ create trigger trg_watches_status_changed_at
 -- ─────────────────────────────────────────────
 create table if not exists price_checks (
   id               uuid primary key default uuid_generate_v4(),
-  itinerary_id     uuid not null references itineraries(id) on delete cascade,
+  -- No cascade, matching production (migration 001 added the column
+  -- without one). lib/account.ts deletes a trip's checks explicitly.
+  itinerary_id     uuid not null references itineraries(id),
   checked_at       timestamptz not null default now(),
   cash_price       numeric(10,2),       -- null if unavailable
   cash_currency    text not null default 'USD',

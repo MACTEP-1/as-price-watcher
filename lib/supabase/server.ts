@@ -72,8 +72,11 @@ export async function createSupabaseRouteClient() {
 /**
  * Service-role client — BYPASSES RLS ENTIRELY.
  *
- * Only for the cron job, which must read every user's watches. Never reachable
- * from a request that a user can influence.
+ * For the cron job (reads every user's watches), the first price check a
+ * new watch stores (app/api/watches/route.ts) and account deletion
+ * (app/api/account/route.ts). The two request-driven uses act only on the
+ * user the route has already verified with auth.getUser() — never on an id
+ * taken from the request.
  */
 export function createSupabaseServiceClient() {
   return createClient(

@@ -9,14 +9,24 @@ import {
 } from 'react-native'
 import * as Linking from 'expo-linking'
 import { supabase } from '../lib/supabase'
+import { normaliseSignInCode } from '../../lib/format'
 
+/**
+ * Email sign-in: type the code from the email (the reliable way on a
+ * phone), or tap the link in it, which still opens the app via
+ * as-price://auth-callback when that works. Same flow as app/login/page.tsx
+ * on the web. Successful verifyOtp fires onAuthStateChange, and the root
+ * layout's guard moves on to the dashboard — nothing to navigate here.
+ */
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState('')
 
-  async function handleSubmit() {
+  async function sendCode() {
     setLoading(true)
     setError('')
 
@@ -25,24 +35,84 @@ export default function LoginScreen() {
     // exp:// dev-server URL inside Expo Go. Either way this must also be
     // added to Supabase's Auth → URL Configuration → Redirect URLs
     // allow-list (as-price://** ) or signInWithOtp succeeds but the link
-    // silently fails to redirect anywhere.
+    // silently fails to redirect anywhere. The code doesn't depend on it.
     const redirectTo = Linking.createURL('auth-callback')
 
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: email.trim(),
       options: { emailRedirectTo: redirectTo },
     })
 
     setLoading(false)
     if (error) setError(error.message)
-    else setSent(true)
+    else {
+      setSent(true)
+      setCode('')
+    }
+  }
+
+  async function verifyCode() {
+    const token = normaliseSignInCode(code)
+    if (!token) {
+      setError('Enter the code from the email — digits only.')
+      return
+    }
+    setVerifying(true)
+    setError('')
+    const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token, type: 'email' })
+    if (error) {
+      setVerifying(false)
+      setError(
+        /expired|invalid/i.test(error.message)
+          ? 'That code is wrong or has expired. Check the newest email, or send a new code.'
+          : error.message
+      )
+    }
   }
 
   if (sent) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Check your email</Text>
-        <Text style={styles.subtitle}>We sent a magic link to {email}</Text>
+        <Text style={styles.subtitle}>We sent a sign-in code to {email.trim()}</Text>
+
+        <TextInput
+          style={[styles.input, styles.codeInput]}
+          placeholder="12345678"
+          placeholderTextColor="#9ca3af"
+          keyboardType="number-pad"
+          textContentType="oneTimeCode"
+          autoComplete="one-time-code"
+          autoFocus
+          maxLength={14}
+          value={code}
+          onChangeText={setCode}
+          onSubmitEditing={verifyCode}
+        />
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <Pressable
+          style={[styles.button, verifying && styles.buttonDisabled]}
+          onPress={verifyCode}
+          disabled={verifying || !code}
+        >
+          {verifying ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Sign in</Text>
+          )}
+        </Pressable>
+
+        <Text style={styles.hint}>Or tap the link in the same email.</Text>
+        <View style={styles.linksRow}>
+          <Pressable onPress={sendCode} disabled={loading} hitSlop={8}>
+            <Text style={styles.link}>{loading ? 'Sending…' : 'Send a new code'}</Text>
+          </Pressable>
+          <Pressable onPress={() => { setSent(false); setError('') }} hitSlop={8}>
+            <Text style={styles.link}>Use a different email</Text>
+          </Pressable>
+        </View>
       </View>
     )
   }
@@ -69,17 +139,17 @@ export default function LoginScreen() {
 
       <Pressable
         style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={handleSubmit}
+        onPress={sendCode}
         disabled={loading || !email}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Send magic link</Text>
+          <Text style={styles.buttonText}>Email me a sign-in code</Text>
         )}
       </Pressable>
 
-      <Text style={styles.hint}>No password needed — we&apos;ll email you a sign-in link</Text>
+      <Text style={styles.hint}>No password needed — we&apos;ll email you a code (and a link)</Text>
     </View>
   )
 }
@@ -138,5 +208,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     color: '#9ca3af',
+  },
+  codeInput: {
+    fontSize: 22,
+    letterSpacing: 4,
+    textAlign: 'center',
+  },
+  linksRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 12,
+  },
+  link: {
+    color: '#0060ac',
+    fontSize: 13,
   },
 })

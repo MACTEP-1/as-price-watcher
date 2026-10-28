@@ -119,3 +119,26 @@ export async function removeWatch(id: string): Promise<void> {
     throw new Error(body.error ?? `Could not remove watch (${res.status})`)
   }
 }
+
+/**
+ * Calls DELETE /api/account — permanently deletes the signed-in user (see
+ * lib/account.ts for what goes). The server takes the user from the token,
+ * never from anything sent here. Afterwards the caller drops the local
+ * session; the layout's auth guard then shows the login screen.
+ */
+export async function deleteAccount(): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not signed in')
+
+  const res = await fetch(`${API_BASE}/api/account`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error ?? `Could not delete your account (${res.status})`)
+  }
+}

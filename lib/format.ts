@@ -398,3 +398,35 @@ export function milesScope(watch: {
   else if (watch.max_stops != null) parts.push('any stops')
   return parts.map((p) => ` · ${p}`).join('')
 }
+
+// ── Sign-in and account ────────────────────────────────────────────────────
+
+/**
+ * The emailed sign-in code as typed or pasted: spaces and dashes dropped
+ * ("123 456", "123-456"). Returns the digits when they look like a code,
+ * else null. Supabase's code length is a project setting (6–10; this
+ * project sends 8, seen in a real email 10/28), so any 6–10 digit run is
+ * accepted and the auth server decides. A hard-coded 6 would have broken
+ * here already.
+ */
+export function normaliseSignInCode(input: string): string | null {
+  const digits = input.replace(/[\s-]/g, '')
+  return /^\d{6,10}$/.test(digits) ? digits : null
+}
+
+/**
+ * Where to go after signing in, from a `?next=` value — only a path on
+ * this site. Anything else (a full URL, protocol-relative "//host", a
+ * backslash trick, empty) falls back to the dashboard, so a crafted link
+ * can't use our login to bounce someone to another site.
+ */
+export function safeNextPath(next: string | null | undefined, fallback = '/dashboard'): string {
+  if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return fallback
+  return next
+}
+
+/** What deleting an account removes — one wording for web and mobile. */
+export const ACCOUNT_DELETION_SUMMARY =
+  'Deleting your account permanently removes your email address, all your watches ' +
+  '(active and archived) and your alert history, and stops all alert emails. Price ' +
+  'history for trips nobody else is watching is deleted too. This can’t be undone.'
