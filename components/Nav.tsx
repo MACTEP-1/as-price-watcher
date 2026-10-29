@@ -11,7 +11,7 @@ export default function Nav() {
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
           </svg>
-          AS Watch
+          Fare Alerts
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <Link href="/dashboard" style={{ fontSize: 14, fontWeight: 500, color: '#bfdbfe', textDecoration: 'none' }}>

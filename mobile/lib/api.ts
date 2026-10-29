@@ -142,3 +142,6 @@ export async function deleteAccount(): Promise<void> {
     throw new Error(body.error ?? `Could not delete your account (${res.status})`)
   }
 }
+
+/** The privacy policy lives on the website (one copy for web, iOS and Android). */
+export const PRIVACY_URL = `${API_BASE}/privacy`

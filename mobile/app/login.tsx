@@ -10,6 +10,7 @@ import {
 import * as Linking from 'expo-linking'
 import { supabase } from '../lib/supabase'
 import { normaliseSignInCode } from '../../lib/format'
+import { PRIVACY_URL } from '../lib/api'
 
 /**
  * Email sign-in: type the code from the email (the reliable way on a
@@ -17,6 +18,10 @@ import { normaliseSignInCode } from '../../lib/format'
  * as-price://auth-callback when that works. Same flow as app/login/page.tsx
  * on the web. Successful verifyOtp fires onAuthStateChange, and the root
  * layout's guard moves on to the dashboard — nothing to navigate here.
+ *
+ * "Sign in with a password" is low-key on purpose: it is for the App Store
+ * and Play reviewers, who can't read an inbox. Only an account given a
+ * password in the Supabase dashboard (the review account) can use it.
  */
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
@@ -25,6 +30,18 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState('')
+  const [usePassword, setUsePassword] = useState(false)
+  const [password, setPassword] = useState('')
+
+  async function signInWithPassword() {
+    setLoading(true)
+    setError('')
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    setLoading(false)
+    if (error) {
+      setError('That email and password don’t match. Most accounts sign in with an emailed code instead.')
+    }
+  }
 
   async function sendCode() {
     setLoading(true)
@@ -119,7 +136,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>AS Price Watch</Text>
+      <Text style={styles.title}>Fare Alerts</Text>
       <Text style={styles.subtitle}>
         Track Alaska Airlines fares — cash &amp; miles
       </Text>
@@ -135,21 +152,46 @@ export default function LoginScreen() {
         onChangeText={setEmail}
       />
 
+      {usePassword ? (
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#9ca3af"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="password"
+          value={password}
+          onChangeText={setPassword}
+          onSubmitEditing={signInWithPassword}
+        />
+      ) : null}
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Pressable
         style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={sendCode}
-        disabled={loading || !email}
+        onPress={usePassword ? signInWithPassword : sendCode}
+        disabled={loading || !email || (usePassword && !password)}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Email me a sign-in code</Text>
+          <Text style={styles.buttonText}>{usePassword ? 'Sign in' : 'Email me a sign-in code'}</Text>
         )}
       </Pressable>
 
-      <Text style={styles.hint}>No password needed — we&apos;ll email you a code (and a link)</Text>
+      <Text style={styles.hint}>
+        {usePassword ? 'Most accounts don’t have a password.' : 'No password needed — we’ll email you a code (and a link).'}
+      </Text>
+      <Pressable onPress={() => { setUsePassword(!usePassword); setError('') }} hitSlop={8}>
+        <Text style={styles.quietLink}>{usePassword ? 'Use an emailed code' : 'Sign in with a password'}</Text>
+      </Pressable>
+
+      <Text style={styles.legal}>
+        Fare Alerts is not affiliated with Alaska Airlines.{' '}
+        <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>Privacy</Text>
+      </Text>
     </View>
   )
 }
@@ -223,5 +265,21 @@ const styles = StyleSheet.create({
   link: {
     color: '#0060ac',
     fontSize: 13,
+  },
+  quietLink: {
+    marginTop: 8,
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#94a3b8',
+    textDecorationLine: 'underline',
+  },
+  legal: {
+    marginTop: 32,
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#94a3b8',
+  },
+  legalLink: {
+    textDecorationLine: 'underline',
   },
 })

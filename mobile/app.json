@@ -1,19 +1,39 @@
 {
   "expo": {
-    "name": "AS Price Watch",
+    "name": "Fare Alerts",
     "slug": "as-price-watcher",
     "scheme": "as-price",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.asprice.watcher"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.getfarealerts.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.asprice.watcher"
+      "package": "com.getfarealerts.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0060ac"
+      }
     },
-    "plugins": ["expo-router", "expo-sqlite"],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#0060ac"
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     }

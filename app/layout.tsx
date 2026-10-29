@@ -2,10 +2,10 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'AS Price Watch',
-  description: 'Track Alaska Airlines flight prices — cash & miles',
+  title: 'Fare Alerts',
+  description: 'Get an email when Alaska Airlines fares drop — cash & miles. Not affiliated with Alaska Airlines.',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'AS Watch' },
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Fare Alerts' },
 }
 
 export const viewport: Viewport = {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 import { normaliseSignInCode, safeNextPath } from '@/lib/format'
 
 /**
@@ -12,6 +13,11 @@ import { normaliseSignInCode, safeNextPath } from '@/lib/format'
  * the app), and an app-store reviewer can be given a code without access
  * to a link's device. Both need the Supabase "Magic Link" email template
  * to include {{ .Token }} (and {{ .ConfirmationURL }} for the link).
+ *
+ * "Sign in with a password" is deliberately low-key: it exists for the App
+ * Store / Play reviewers, who can't read an inbox. Only an account given a
+ * password in the Supabase dashboard (the review account) can use it;
+ * everyone else has no password, so it simply fails for them.
  */
 export default function LoginPage() {
   const router = useRouter()
@@ -23,6 +29,8 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [next, setNext] = useState('/dashboard')
+  const [usePassword, setUsePassword] = useState(false)
+  const [password, setPassword] = useState('')
 
   const supabase = createSupabaseBrowserClient()
 
@@ -35,8 +43,26 @@ export default function LoginPage() {
     if (params.get('error')) setError('That sign-in link didn’t work — request a new code below.')
   }, [])
 
+  async function signInWithPassword() {
+    setLoading(true)
+    setError('')
+    setNotice('')
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    if (error) {
+      setLoading(false)
+      setError('That email and password don’t match. Most accounts sign in with an emailed code instead.')
+      return
+    }
+    router.replace(next)
+    router.refresh()
+  }
+
   async function sendCode(e?: React.FormEvent) {
     e?.preventDefault()
+    if (usePassword) {
+      await signInWithPassword()
+      return
+    }
     setLoading(true)
     setError('')
     setNotice('')
@@ -109,7 +135,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: '700', color: '#0f172a' }}>
-            AS Price Watch
+            Fare Alerts
           </h1>
           <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>
             Track Alaska Airlines fares — cash &amp; miles
@@ -239,6 +265,38 @@ export default function LoginPage() {
               />
             </div>
 
+            {usePassword && (
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: '6px',
+                }}>
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    fontSize: '15px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    background: '#fff',
+                    color: '#111827',
+                  }}
+                />
+              </div>
+            )}
+
             {error && (
               <p style={{ margin: '0 0 12px', fontSize: '14px', color: '#dc2626' }}>{error}</p>
             )}
@@ -259,14 +317,28 @@ export default function LoginPage() {
                 marginBottom: '12px',
               }}
             >
-              {loading ? 'Sending…' : 'Email me a sign-in code'}
+              {usePassword
+                ? (loading ? 'Signing in…' : 'Sign in')
+                : (loading ? 'Sending…' : 'Email me a sign-in code')}
             </button>
 
             <p style={{ margin: 0, fontSize: '12px', textAlign: 'center', color: '#9ca3af' }}>
-              No password needed — we&apos;ll email you a code (and a link)
+              {usePassword ? 'Most accounts don’t have a password.' : 'No password needed — we’ll email you a code (and a link).'}{' '}
+              <button
+                type="button"
+                onClick={() => { setUsePassword(!usePassword); setError('') }}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#94a3b8', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer' }}
+              >
+                {usePassword ? 'Use an emailed code' : 'Sign in with a password'}
+              </button>
             </p>
           </form>
         )}
+
+        <p style={{ margin: '28px 0 0', fontSize: '12px', textAlign: 'center', color: '#94a3b8' }}>
+          Fare Alerts is not affiliated with Alaska Airlines.{' '}
+          <Link href="/privacy" style={{ color: '#94a3b8' }}>Privacy</Link>
+        </p>
       </div>
     </div>
   )

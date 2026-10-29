@@ -1,5 +1,6 @@
 'use client'
 
+import LegalFooter from '@/components/LegalFooter'
 import { useState, useEffect } from 'react'
 import type { SearchResult } from './api/search/route'
 import { SEARCH_MAX_DAYS } from '@/lib/config'
@@ -343,7 +344,7 @@ export default function Home() {
           <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
           </svg>
-          AS Price Watch
+          Fare Alerts
         </div>
         <a href="/login" style={s.loginBtn}>Sign in</a>
       </div>
@@ -516,6 +517,8 @@ export default function Home() {
           <SeatsAeroCredit style={{ marginTop: 16 }} />
         </div>
       )}
+
+      <LegalFooter tone="dark" />
 
       {/* Login prompt modal */}
       {showLoginPrompt && (

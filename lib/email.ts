@@ -149,7 +149,7 @@ export function buildEmailHtml(params: {
         <!-- Header -->
         <tr>
           <td style="background:#0f172a;padding:24px 32px;">
-            <span style="color:#38bdf8;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;">Alaska Price Watch</span>
+            <span style="color:#38bdf8;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;">Fare Alerts</span>
             <h1 style="margin:8px 0 0;color:#fff;font-size:20px;line-height:1.3;">${headline}</h1>
           </td>
         </tr>
@@ -186,7 +186,8 @@ export function buildEmailHtml(params: {
         <tr>
           <td style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;">
             <p style="margin:0;font-size:12px;color:#9ca3af;">
-              You're watching ${route}. <a href="${unsubUrl}" style="color:#6b7280;">Stop watching this route</a>
+              You're watching ${route}. <a href="${unsubUrl}" style="color:#6b7280;">Stop watching this route</a><br>
+              Fare Alerts is not affiliated with Alaska Airlines.
             </p>
           </td>
         </tr>

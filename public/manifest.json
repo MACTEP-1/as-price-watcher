@@ -1,6 +1,6 @@
 {
-  "name": "AS Price Watch",
-  "short_name": "AS Watch",
+  "name": "Fare Alerts",
+  "short_name": "Fare Alerts",
   "description": "Track Alaska Airlines flight prices — cash & miles",
   "start_url": "/dashboard",
   "display": "standalone",

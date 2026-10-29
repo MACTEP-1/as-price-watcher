@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import * as Linking from 'expo-linking'
 import { supabase } from '../lib/supabase'
-import { deleteAccount } from '../lib/api'
+import { deleteAccount, PRIVACY_URL } from '../lib/api'
 import { ACCOUNT_DELETION_SUMMARY } from '../../lib/format'
 
 /**
@@ -82,6 +83,11 @@ export default function AccountScreen() {
         </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
+
+      <Text style={styles.legal}>
+        Fare Alerts is not affiliated with Alaska Airlines.{' '}
+        <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>Privacy policy</Text>
+      </Text>
     </View>
   )
 }
@@ -126,4 +132,6 @@ const styles = StyleSheet.create({
   dangerButtonDisabled: { opacity: 0.6 },
   dangerText: { color: '#b91c1c', fontSize: 14 },
   error: { color: '#dc2626', fontSize: 14, marginTop: 12 },
+  legal: { marginTop: 24, marginHorizontal: 16, fontSize: 12, textAlign: 'center', color: '#94a3b8' },
+  legalLink: { textDecorationLine: 'underline' },
 })
