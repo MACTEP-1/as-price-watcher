@@ -143,6 +143,7 @@ export async function getWatchesWithPrices(
         max_stops: itin.max_stops ?? null,
         outbound_flights: itin.outbound_flights ?? null,
         return_flights: itin.return_flights ?? null,
+        exclude_basic: itin.exclude_basic ?? false,
 
         latest_cash: latest?.cash_price ?? null,
         latest_miles: latest?.miles_price ?? null,
@@ -212,6 +213,7 @@ export async function getWatchDetail(
         max_stops: itin.max_stops ?? null,
         outbound_flights: itin.outbound_flights ?? null,
         return_flights: itin.return_flights ?? null,
+        exclude_basic: itin.exclude_basic ?? false,
 
       latest_cash: latest?.cash_price ?? null,
       latest_miles: latest?.miles_price ?? null,

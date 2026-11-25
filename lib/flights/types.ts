@@ -19,6 +19,12 @@ export interface FlightSearchParams {
    */
   outboundFlights?: string[] | null
   returnFlights?: string[] | null
+  /**
+   * Skip basic economy — Alaska "Saver" (migration 013): every search for
+   * the itinerary sends SerpApi's exclude_basic, so prices are Main or
+   * better, rivals included. US domestic economy only (API-validated).
+   */
+  excludeBasic?: boolean
 }
 
 export interface CashFareResult {

@@ -91,6 +91,21 @@ export function isKnownAirport(code: string): boolean {
   return KNOWN_CODES.has(code.trim().toUpperCase())
 }
 
+const COUNTRY_BY_CODE = new Map(AIRPORT_ROWS.map((r) => [r[0], r[2]]))
+
+/**
+ * Whether "skip Saver" (SerpApi exclude_basic, migration 013) can apply:
+ * SerpApi documents it for US domestic flights in economy only. Both
+ * airports must be known US airports (OurAirports country "US", which
+ * includes Alaska and Hawaii); unknown codes say no rather than guess.
+ */
+export function canExcludeBasic(origin: string, destination: string, cabinClass: string): boolean {
+  if (cabinClass !== 'economy') return false
+  const o = COUNTRY_BY_CODE.get(origin.trim().toUpperCase())
+  const d = COUNTRY_BY_CODE.get(destination.trim().toUpperCase())
+  return o === 'US' && d === 'US'
+}
+
 /**
  * Ranked search by code, city, airport name, alias or keyword. An empty
  * query returns [] so the dropdown doesn't dump the list on focus.

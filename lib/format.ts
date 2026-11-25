@@ -350,7 +350,7 @@ export function pinnedFareScope(
  * (only outbound flights are fetched), so the form leaves it for the user.
  */
 export function pinPrefillParams(
-  w: { origin: string; destination: string; depart_date: string; return_date: string | null; cabin_class: string },
+  w: { origin: string; destination: string; depart_date: string; return_date: string | null; cabin_class: string; exclude_basic?: boolean },
   check: { flight_number: string | null; legs?: { flight: string | null }[] | null } | null | undefined
 ): Record<string, string> | null {
   const legFlights = (check?.legs ?? []).map((l) => l.flight).filter((f): f is string => !!f)
@@ -364,6 +364,7 @@ export function pinPrefillParams(
     out: formatFlightList(flights),
   }
   if (w.return_date) p.return = w.return_date
+  if (w.exclude_basic) p.nosaver = '1'
   return p
 }
 
@@ -371,6 +372,10 @@ export function pinPrefillParams(
 export function formatFlightList(flights: string[] | null | undefined): string {
   return (flights ?? []).map((f) => formatFlightNumber(f) ?? f).join(' + ')
 }
+
+/** One line under the new-watch forms' Fare choice (migration 013). */
+export const NO_SAVER_HINT =
+  'Saver is Alaska’s basic economy. “No Saver” tracks the cheapest fare with seat selection and a carry-on — usually Main. US routes, economy only.'
 
 /**
  * The short limit shown after a watch's dates: the pinned flights
@@ -381,12 +386,18 @@ export function formatWatchLimits(w: {
   max_stops: number | null
   outbound_flights?: string[] | null
   return_flights?: string[] | null
+  exclude_basic?: boolean
 }): string | null {
+  let limit: string | null
   if (w.outbound_flights?.length) {
     const back = w.return_flights?.length ? ` / ${formatFlightList(w.return_flights)}` : ''
-    return `${formatFlightList(w.outbound_flights)}${back} only`
+    limit = `${formatFlightList(w.outbound_flights)}${back} only`
+  } else {
+    limit = formatStopLimit(w.max_stops)
   }
-  return formatStopLimit(w.max_stops)
+  // Migration 013: say the price is Main or better, not Saver.
+  if (w.exclude_basic) limit = limit ? `${limit} · no Saver` : 'no Saver'
+  return limit
 }
 
 export function formatStopLimit(maxStops: number | null | undefined): string | null {

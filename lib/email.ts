@@ -26,6 +26,7 @@ export interface AlertEmailWatch {
   max_stops?: number | null
   outbound_flights?: string[] | null
   return_flights?: string[] | null
+  exclude_basic?: boolean
 }
 import type { AlertTrigger } from './alerts'
 import { formatDrop } from './alerts'
@@ -88,6 +89,7 @@ export function tripDetailLine(watch: AlertEmailWatch): string {
     max_stops: watch.max_stops ?? null,
     outbound_flights: watch.outbound_flights,
     return_flights: watch.return_flights,
+    exclude_basic: watch.exclude_basic,
   })
   return [dates, watch.cabin_class.replace('_', ' '), limits].filter(Boolean).join(' · ')
 }

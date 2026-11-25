@@ -244,6 +244,8 @@ async function runPriceCheck(): Promise<NextResponse> {
           // Pinned flights (migration 012) override both of the above.
           outboundFlights: itinerary.outbound_flights ?? null,
           returnFlights: itinerary.return_flights ?? null,
+          // Skip Saver (migration 013) — applies to every search above.
+          excludeBasic: itinerary.exclude_basic ?? false,
         }),
         getCheapestMilesPrice({
           origin: itinerary.origin,
@@ -378,6 +380,7 @@ async function runPriceCheck(): Promise<NextResponse> {
             max_stops: itinerary.max_stops,
             outbound_flights: itinerary.outbound_flights ?? null,
             return_flights: itinerary.return_flights ?? null,
+            exclude_basic: itinerary.exclude_basic ?? false,
           },
           trigger,
           alertId: alertRecord.id,

@@ -69,6 +69,8 @@ export async function createWatch(params: {
   /** Migration 012: exact flights, e.g. ['AS326']; null = cheapest trip. */
   outboundFlights?: string[] | null
   returnFlights?: string[] | null
+  /** Migration 013: skip Saver (basic economy). US domestic economy only. */
+  excludeBasic?: boolean
 }): Promise<{ id: string }> {
   const {
     data: { session },

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import AirportAutocomplete from '@/components/AirportAutocomplete'
-import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList } from '@/lib/format'
+import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList, NO_SAVER_HINT } from '@/lib/format'
+import { canExcludeBasic } from '@/lib/airports'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy (Saver / Main)' },
@@ -74,6 +75,8 @@ export default function NewWatchPage() {
   })
   const [maxStops, setMaxStops] = useState<number | null>(null)
   const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>('alaska_only')
+  // Migration 013: skip Saver. Offered only where SerpApi supports it.
+  const [noSaver, setNoSaver] = useState(false)
   // Pinned flights (migration 012) — tucked behind a small link; most
   // watches want the cheapest trip.
   const [showPins, setShowPins] = useState(false)
@@ -97,6 +100,7 @@ export default function NewWatchPage() {
     }))
     setTripType(q.get('return') ? 'round_trip' : 'one_way')
     setPinOut(q.get('out') ?? '')
+    setNoSaver(q.get('nosaver') === '1')
     setShowPins(true)
   }, [])
   const [error, setError] = useState('')
@@ -155,6 +159,7 @@ export default function NewWatchPage() {
         fareScope,
         outboundFlights: outboundFlights.length ? outboundFlights : null,
         returnFlights: returnFlights.length ? returnFlights : null,
+        excludeBasic: saverChoiceShown && noSaver,
       }),
     })
     const data = await res.json()
@@ -168,6 +173,9 @@ export default function NewWatchPage() {
   const minDate = tomorrow.toISOString().split('T')[0]
 
   const isRoundTrip = tripType === 'round_trip'
+  // The Saver choice exists only for US domestic economy (SerpApi's
+  // exclude_basic); elsewhere it's hidden and never sent.
+  const saverChoiceShown = canExcludeBasic(form.origin, form.destination, form.cabinClass)
 
   return (
     <>
@@ -270,6 +278,25 @@ export default function NewWatchPage() {
               ))}
             </div>
           </div>
+
+          {saverChoiceShown && (
+            <div>
+              <label style={labelStyle}>Fare</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[{ value: false, label: 'Any (incl. Saver)' }, { value: true, label: 'No Saver' }].map((o) => (
+                  <button
+                    key={String(o.value)}
+                    type="button"
+                    onClick={() => setNoSaver(o.value)}
+                    style={{ ...pill(noSaver === o.value), flex: 1, padding: '8px 4px', fontSize: 12 }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#94a3b8' }}>{NO_SAVER_HINT}</p>
+            </div>
+          )}
 
           <div>
             <label style={labelStyle}>Stops</label>

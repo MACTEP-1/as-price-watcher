@@ -299,6 +299,14 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     // cheapest fare, which Google puts on the first screen anyway.
     if (params.outboundFlights?.length) query.set('show_hidden', 'true')
 
+    // Skip Saver / basic economy (migration 013) — on EVERY search for the
+    // itinerary (all-Alaska, unfiltered rival, pinned, pinned return), so
+    // the tracked price, the rival and Google's price history all describe
+    // the same kind of fare. Measured 11/25 SEA→LAS: AS 96 + AS 2018 $224
+    // → $274, cheapest all-Alaska $214 → $264, and the price history's last
+    // point followed the filter ($264). SerpApi: US domestic economy only.
+    if (params.excludeBasic) query.set('exclude_basic', 'true')
+
     // Keep the request inside the cron's 30s budget.
     //
     // This was 20s, which did NOT achieve that: cron-job.org's timeout is a

@@ -5,6 +5,7 @@ import { getCheapestFare } from '@/lib/flights'
 import { getCheapestMilesPrice } from '@/lib/miles'
 import { priceCheckRow, googleHistoryRows } from '@/lib/price-check-row'
 import { normaliseFlightList, pinnedFareScope } from '@/lib/format'
+import { canExcludeBasic } from '@/lib/airports'
 import type { CabinClass } from '@/types'
 
 export async function GET() {
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { origin, destination, departDate, returnDate, cabinClass, maxStops, fareScope, outboundFlights, returnFlights } = body
+  const { origin, destination, departDate, returnDate, cabinClass, maxStops, fareScope, outboundFlights, returnFlights, excludeBasic } = body
 
   if (!origin || !destination || !departDate) {
     return NextResponse.json({ error: 'origin, destination, and departDate are required' }, { status: 400 })
@@ -107,6 +108,23 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     )
   }
+  /**
+   * Skip Saver / basic economy (migration 013): optional, true or absent.
+   * SerpApi supports it only for US domestic economy, so anything else is
+   * refused rather than silently ignored — a watch must never claim
+   * "no Saver" for a price that may well be a Saver fare.
+   */
+  if (excludeBasic !== undefined && excludeBasic !== null && typeof excludeBasic !== 'boolean') {
+    return NextResponse.json({ error: 'excludeBasic must be true, false or omitted' }, { status: 400 })
+  }
+  const wantsNoSaver = excludeBasic === true
+  if (wantsNoSaver && !canExcludeBasic(origin, destination, cabinClass ?? 'economy')) {
+    return NextResponse.json(
+      { error: 'Skipping Saver fares works only for economy on US domestic routes' },
+      { status: 400 }
+    )
+  }
+
   const effectiveMaxStops = pinOut ? null : normalisedMaxStops
   const effectiveFareScope = pinOut
     ? pinnedFareScope(pinOut, pinRet, !!normalisedReturn)
@@ -133,6 +151,9 @@ export async function POST(req: NextRequest) {
       p_fare_scope: effectiveFareScope,
       p_outbound_flights: pinOut,
       p_return_flights: pinRet,
+      // Sent only when true, so a plain watch keeps working even before
+      // migration 013 is applied (the 9-argument function).
+      ...(wantsNoSaver ? { p_exclude_basic: true } : {}),
     }
   )
 
@@ -204,6 +225,7 @@ export async function POST(req: NextRequest) {
           fareScope: effectiveFareScope,
           outboundFlights: pinOut,
           returnFlights: pinRet,
+          excludeBasic: wantsNoSaver,
         }),
         getCheapestMilesPrice({
           origin,

@@ -48,6 +48,8 @@ export interface Itinerary {
   // ['AS623','AS625']; null = cheapest trip. Part of the identity.
   outbound_flights?: string[] | null
   return_flights?: string[] | null
+  // Migration 013: skip basic economy (Alaska Saver). Part of the identity.
+  exclude_basic?: boolean
   created_at: string
 }
 
@@ -147,6 +149,8 @@ export interface WatchWithLatestPrice {
   // cheapest trip.
   outbound_flights?: string[] | null
   return_flights?: string[] | null
+  // Migration 013: Saver (basic economy) fares skipped.
+  exclude_basic?: boolean
 
   latest_cash: number | null
   latest_miles: number | null

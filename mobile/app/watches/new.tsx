@@ -11,7 +11,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { createWatch } from '../../lib/api'
 import DatePickerField from '../../components/DatePickerField'
 import AirportAutocomplete from '../../components/AirportAutocomplete'
-import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList } from '../../../lib/format'
+import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList, NO_SAVER_HINT } from '../../../lib/format'
+import { canExcludeBasic } from '../../../lib/airports'
 
 const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy' },
@@ -74,7 +75,7 @@ export default function NewWatchScreen() {
   const router = useRouter()
   // Pre-fill from a watch screen's "Watch just this flight" (migration 012).
   const prefill = useLocalSearchParams<{
-    from?: string; to?: string; depart?: string; return?: string; cabin?: string; out?: string
+    from?: string; to?: string; depart?: string; return?: string; cabin?: string; out?: string; nosaver?: string
   }>()
   const [tripType, setTripType] = useState<TripType>(prefill.return ? 'round_trip' : 'one_way')
   const [form, setForm] = useState({
@@ -90,6 +91,9 @@ export default function NewWatchScreen() {
   const [pinRet, setPinRet] = useState('')
   const [maxStops, setMaxStops] = useState<number | null>(null)
   const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>('alaska_only')
+  // Migration 013: skip Saver — offered only for US domestic economy.
+  const [noSaver, setNoSaver] = useState(prefill.nosaver === '1')
+  const saverChoiceShown = canExcludeBasic(form.origin, form.destination, form.cabinClass)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -163,6 +167,7 @@ export default function NewWatchScreen() {
         fareScope,
         outboundFlights: outboundFlights.length ? outboundFlights : null,
         returnFlights: returnFlights.length ? returnFlights : null,
+        excludeBasic: saverChoiceShown && noSaver,
       })
       router.replace(`/watches/${watch.id}`)
     } catch (err) {
@@ -294,6 +299,27 @@ export default function NewWatchScreen() {
           )
         })}
       </View>
+
+      {saverChoiceShown ? (
+        <>
+          <Text style={styles.label}>Fare</Text>
+          <View style={styles.pillRow}>
+            {[{ value: false, label: 'Any (incl. Saver)' }, { value: true, label: 'No Saver' }].map((o) => {
+              const active = noSaver === o.value
+              return (
+                <Pressable
+                  key={String(o.value)}
+                  onPress={() => setNoSaver(o.value)}
+                  style={[styles.pillFlex, active && styles.pillActive]}
+                >
+                  <Text style={[styles.pillText, active && styles.pillTextActive]}>{o.label}</Text>
+                </Pressable>
+              )
+            })}
+          </View>
+          <Text style={styles.fieldHint}>{NO_SAVER_HINT}</Text>
+        </>
+      ) : null}
 
       <Text style={styles.label}>Stops</Text>
       <View style={styles.pillRow}>

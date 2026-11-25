@@ -85,6 +85,10 @@ create table if not exists itineraries (
   -- Part of the identity.
   outbound_flights text[],
   return_flights   text[],
+  -- Skip basic economy / Alaska "Saver" (migration 013): SerpApi
+  -- exclude_basic=true on every search. US domestic economy only. Part of
+  -- the identity.
+  exclude_basic boolean not null default false,
   created_at    timestamptz not null default now()
 );
 
@@ -97,7 +101,8 @@ create unique index if not exists itineraries_unique_idx
                   coalesce(return_date, 'infinity'::date), cabin_class,
                   coalesce(max_stops, -1), fare_scope,
                   coalesce(outbound_flights, '{}'::text[]),
-                  coalesce(return_flights, '{}'::text[]));
+                  coalesce(return_flights, '{}'::text[]),
+                  exclude_basic);
 
 alter table itineraries enable row level security;
 
@@ -267,7 +272,8 @@ create or replace function find_or_create_itinerary(
   p_max_stops   integer default null,
   p_fare_scope  text    default 'alaska_leg',  -- migration 010; new watches pass 'alaska_only'
   p_outbound_flights text[] default null,    -- migration 012
-  p_return_flights   text[] default null
+  p_return_flights   text[] default null,
+  p_exclude_basic    boolean default false   -- migration 013
 ) returns uuid
 language plpgsql
 security definer
@@ -285,14 +291,15 @@ begin
      and coalesce(max_stops, -1) = coalesce(p_max_stops, -1)
      and fare_scope = p_fare_scope
      and coalesce(outbound_flights, '{}'::text[]) = coalesce(p_outbound_flights, '{}'::text[])
-     and coalesce(return_flights, '{}'::text[]) = coalesce(p_return_flights, '{}'::text[]);
+     and coalesce(return_flights, '{}'::text[]) = coalesce(p_return_flights, '{}'::text[])
+     and exclude_basic = coalesce(p_exclude_basic, false);
 
   if v_id is not null then
     return v_id;
   end if;
 
-  insert into itineraries (origin, destination, depart_date, return_date, cabin_class, max_stops, fare_scope, outbound_flights, return_flights)
-  values (p_origin, p_destination, p_depart_date, p_return_date, p_cabin_class, p_max_stops, p_fare_scope, p_outbound_flights, p_return_flights)
+  insert into itineraries (origin, destination, depart_date, return_date, cabin_class, max_stops, fare_scope, outbound_flights, return_flights, exclude_basic)
+  values (p_origin, p_destination, p_depart_date, p_return_date, p_cabin_class, p_max_stops, p_fare_scope, p_outbound_flights, p_return_flights, coalesce(p_exclude_basic, false))
   returning id into v_id;
 
   return v_id;
@@ -307,7 +314,8 @@ exception when unique_violation then
      and coalesce(max_stops, -1) = coalesce(p_max_stops, -1)
      and fare_scope = p_fare_scope
      and coalesce(outbound_flights, '{}'::text[]) = coalesce(p_outbound_flights, '{}'::text[])
-     and coalesce(return_flights, '{}'::text[]) = coalesce(p_return_flights, '{}'::text[]);
+     and coalesce(return_flights, '{}'::text[]) = coalesce(p_return_flights, '{}'::text[])
+     and exclude_basic = coalesce(p_exclude_basic, false);
   return v_id;
 end;
 $$;
@@ -316,8 +324,8 @@ $$;
 -- new functions to anon/authenticated/service_role directly, so revoking
 -- from public alone left logged-out callers able to run this SECURITY
 -- DEFINER function (found live 2026-09-24, fixed in migration 006).
-revoke all on function find_or_create_itinerary(text,text,date,date,text,integer,text,text[],text[]) from public, anon;
-grant execute on function find_or_create_itinerary(text,text,date,date,text,integer,text,text[],text[]) to authenticated, service_role;
+revoke all on function find_or_create_itinerary(text,text,date,date,text,integer,text,text[],text[],boolean) from public, anon;
+grant execute on function find_or_create_itinerary(text,text,date,date,text,integer,text,text[],text[],boolean) to authenticated, service_role;
 
 -- ─────────────────────────────────────────────
 -- Indexes
