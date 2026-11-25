@@ -27,6 +27,7 @@ import {
   formatItineraryLine,
   formatCompetitorLine,
   formatReturnNote,
+  formatMissingFare,
   formatCheckCount,
   formatWatchLimits,
   milesScope,
@@ -213,6 +214,10 @@ export default function DashboardScreen() {
                     ? `Outbound ${itineraryLine} · ${formatReturnNote(latestCheck, item)}`
                     : itineraryLine}
                 </Text>
+              )}
+
+              {!!formatMissingFare(latestCheck, item) && (
+                <Text style={styles.competitorLine}>{formatMissingFare(latestCheck, item)}</Text>
               )}
 
               {/* Context only — never an alert. See lib/format.ts. */}

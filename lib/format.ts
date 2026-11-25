@@ -139,7 +139,11 @@ export function formatItineraryLine(check: {
   duration_minutes: number | null
   legs?: { flight: string | null; from: string | null; to: string | null }[] | null
 } | null | undefined): string {
-  if (!check) return ''
+  // No flight at all = no fare was found. The row builder still stores
+  // stops = 0 then (a NOT-NULL-ish default), which used to render a bare
+  // "nonstop" under an empty price — SEA→LAS pinned to AS 96 + AS 2018,
+  // 11/25. Say nothing here; formatMissingFare explains the blank instead.
+  if (!check || (!check.flight_number && !check.legs?.length)) return ''
   return [
     formatRouting(check.legs) ?? formatFlightNumber(check.flight_number),
     formatStops(check.stops),
@@ -148,6 +152,26 @@ export function formatItineraryLine(check: {
   ]
     .filter((part): part is string => !!part)
     .join(' · ')
+}
+
+/**
+ * Why the cash price is blank, when the latest real check found no fare —
+ * otherwise the card just says "Not enough data yet", which reads as
+ * "wait a day" when the actual answer may be "this flight isn't listed".
+ * A pinned watch names its flights: the provider never substitutes another
+ * flight, so a pin Google doesn't list that day stays blank (see
+ * getPinnedFare). Null when there's a price, or nothing has been checked.
+ */
+export function formatMissingFare(
+  check: { cash_price: number | null; source?: string | null } | null | undefined,
+  watch: { outbound_flights?: string[] | null; return_flights?: string[] | null }
+): string | null {
+  if (!check || check.cash_price != null || check.source === 'google_history') return null
+  if (watch.outbound_flights?.length) {
+    const back = watch.return_flights?.length ? ` / ${formatFlightList(watch.return_flights)}` : ''
+    return `${formatFlightList(watch.outbound_flights)}${back} not found on Google Flights at the last check`
+  }
+  return 'No fare found at the last check'
 }
 
 /**

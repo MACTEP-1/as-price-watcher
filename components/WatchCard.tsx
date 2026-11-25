@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { WatchWithLatestPrice } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatCheckCount, formatWatchLimits, milesScope } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatMissingFare, formatCheckCount, formatWatchLimits, milesScope } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import PriceSparkline from './PriceSparkline'
 
@@ -116,6 +116,12 @@ export default function WatchCard({ watch }: Props) {
         {itineraryLine && (
           <p style={{ margin: '12px 0 0', fontSize: 12, color: '#94a3b8' }}>
             {isRoundTrip ? `Outbound ${itineraryLine} · ${formatReturnNote(latestCheck, watch)}` : itineraryLine}
+          </p>
+        )}
+
+        {formatMissingFare(latestCheck, watch) && (
+          <p style={{ margin: '12px 0 0', fontSize: 12, color: '#b45309' }}>
+            {formatMissingFare(latestCheck, watch)}
           </p>
         )}
 

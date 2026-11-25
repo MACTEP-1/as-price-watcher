@@ -90,7 +90,7 @@ const RETURNS_FOR_326 = {
 let requests: Record<string, string | null>[] = []
 ;(globalThis as any).fetch = async (u: string) => {
   const q = new URL(u).searchParams
-  requests.push({ token: q.get('departure_token'), stops: q.get('stops'), airlines: q.get('include_airlines') })
+  requests.push({ token: q.get('departure_token'), stops: q.get('stops'), airlines: q.get('include_airlines'), hidden: q.get('show_hidden') })
   const body = q.get('departure_token') === 'tok-326' ? RETURNS_FOR_326 : q.get('departure_token') ? { best_flights: [] } : OUTBOUNDS
   return { ok: true, status: 200, json: async () => body, text: async () => '' }
 }
@@ -110,7 +110,15 @@ check('outbound + return pinned: the exact pair\'s round-trip price, two searche
 
 requests = []
 await p.getCheapestFare({ ...base, outboundFlights: ['AS326'], maxStops: 0, fareScope: 'alaska_only' })
-check('pinned: stop limit and Airlines filter not sent — the flights decide', requests, [{ token: null, stops: null, airlines: null }])
+check('pinned: stop limit and Airlines filter not sent — the flights decide; hidden flights asked for', requests, [{ token: null, stops: null, airlines: null, hidden: 'true' }])
+
+requests = []
+await p.getCheapestFare({ ...base, outboundFlights: ['AS326'], returnFlights: ['AS325'] })
+check('pinned return search asks for hidden flights too', requests.map((r) => r.hidden), ['true', 'true'])
+
+requests = []
+await p.getCheapestFare({ ...base })
+check('unpinned search keeps Google\'s default (no show_hidden)', requests.every((r) => r.hidden === null) && requests.length > 0, true)
 
 check('connection pinned in order; a one-stop rival is fair game',
   sum(await p.getCheapestFare({ ...base, outboundFlights: ['AS623', 'AS625'] })), { cash: 854, scope: 'alaska_leg', flight: 'AS623', rival: 'Southwest' })
@@ -124,6 +132,18 @@ check('pinned nonstop, only a one-stop fare is cheaper → no rival (the SFO→P
 check('connection in the wrong order is not a match', await p.getCheapestFare({ ...base, outboundFlights: ['AS625', 'AS623'] }), null)
 check('pinned outbound not on sale → no price, not a substitute', await p.getCheapestFare({ ...base, outboundFlights: ['AS999'] }), null)
 check('pinned return not on sale → no price', await p.getCheapestFare({ ...base, outboundFlights: ['AS326'], returnFlights: ['AS999'] }), null)
+
+// The real case, 11/25: SEA→LAS 3/15, AS 96 + AS 2018 is only in Google's
+// "View more flights" list. Without show_hidden the pin is never found.
+;(globalThis as any).fetch = async (u: string) => {
+  const hidden = new URL(u).searchParams.get('show_hidden') === 'true'
+  const first = [itin(149, null, ['Alaska', 'AS 1196']), itin(139, null, ['Spirit', 'NK 1'])]
+  const more = [itin(224, null, ['Alaska', 'AS 96'], ['Alaska', 'AS 2018'])]
+  return { ok: true, status: 200, text: async () => '', json: async () => ({ best_flights: first, other_flights: hidden ? more : [] }) }
+}
+check('SEA→LAS: a connection behind "View more flights" is found',
+  sum(await p.getCheapestFare({ origin: 'SEA', destination: 'LAS', departDate: '2027-03-15', returnDate: null, cabinClass: 'economy', outboundFlights: ['AS96', 'AS2018'] })),
+  { cash: 224, scope: 'alaska_only', flight: 'AS96', rival: 'Spirit' })
 
 console.log(failures === 0 ? '\nall passed' : `\n${failures} FAILED`)
 process.exit(failures === 0 ? 0 : 1)

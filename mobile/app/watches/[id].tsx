@@ -20,6 +20,7 @@ import {
   formatItineraryLine,
   formatCompetitorLine,
   formatReturnNote,
+  formatMissingFare,
   formatCheckCount,
   formatWatchLimits,
   pinPrefillParams,
@@ -198,6 +199,10 @@ export default function WatchDetailScreen() {
             {formatItineraryLine(latest)}
             {watch.return_date ? ` · ${formatReturnNote(latest, watch)}` : ''}
           </Text>
+        )}
+
+        {!!formatMissingFare(latest, watch) && (
+          <Text style={styles.competitorLine}>{formatMissingFare(latest, watch)}</Text>
         )}
 
         {!!formatCompetitorLine(latest) && (

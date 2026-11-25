@@ -287,6 +287,18 @@ export class SerpApiFlightProvider implements FlightPriceProvider {
     // priced as the full round trip (pinned return flights, migration 012).
     if (departureToken) query.set('departure_token', departureToken)
 
+    // Pinned flights need EVERY itinerary, not the first screen. By default
+    // Google (so SerpApi) returns only what it shows before "View more
+    // flights"; a specific connection is often behind that button. Measured
+    // 11/25, SEA→LAS 3/15 one-way: default 21 itineraries, none via SAN, so
+    // the pin AS 96 + AS 2018 was "not found" — show_hidden: 104 itineraries,
+    // the pin at $224, exactly what Google Flights showed in the browser.
+    // Cost: still one search credit; latency 1.5–4.8s in that test, inside
+    // the 8s abort below. deep_search gave the same 104 itineraries, so it
+    // isn't used. Unpinned searches keep the default: they want the
+    // cheapest fare, which Google puts on the first screen anyway.
+    if (params.outboundFlights?.length) query.set('show_hidden', 'true')
+
     // Keep the request inside the cron's 30s budget.
     //
     // This was 20s, which did NOT achieve that: cron-job.org's timeout is a

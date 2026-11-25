@@ -21,6 +21,7 @@ export {
   formatItineraryLine,
   formatCompetitorLine,
   formatReturnNote,
+  formatMissingFare,
   formatCheckCount,
   FARE_SCOPE_OPTIONS,
   fareScopeHint,
