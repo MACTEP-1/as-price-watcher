@@ -71,6 +71,8 @@ export async function createWatch(params: {
   returnFlights?: string[] | null
   /** Migration 013: skip Saver (basic economy). US domestic economy only. */
   excludeBasic?: boolean
+  /** "Change…": the watch this one replaces — archived once this is saved. */
+  replacesWatchId?: string | null
 }): Promise<{ id: string }> {
   const {
     data: { session },

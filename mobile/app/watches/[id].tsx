@@ -24,6 +24,7 @@ import {
   formatCheckCount,
   formatWatchLimits,
   pinPrefillParams,
+  watchFormParams,
   milesScope,
   pctChange,
   formatPctChange,
@@ -228,6 +229,17 @@ export default function WatchDetailScreen() {
             }
           >
             <Text style={styles.pinLink}>Watch just this flight</Text>
+          </Pressable>
+        )}
+
+        {/* Edit = a new watch with these settings pre-filled; saving
+            archives this one (lib/format.ts watchFormParams). */}
+        {watch.status === 'active' && (
+          <Pressable
+            hitSlop={8}
+            onPress={() => router.push({ pathname: '/watches/new', params: watchFormParams(watch) })}
+          >
+            <Text style={styles.pinLink}>Change…</Text>
           </Pressable>
         )}
       </View>

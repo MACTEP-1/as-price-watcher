@@ -145,6 +145,9 @@ export interface WatchWithLatestPrice {
   // Stop limit (migration 006): null = any, 0 = nonstop only, 1 = up to 1
   // stop, 2 = up to 2 stops. Part of the itinerary's identity.
   max_stops: number | null
+  // Migration 010 — what kind of trip is priced. Needed to pre-fill
+  // "Change…" with the watch's own settings.
+  fare_scope?: ItineraryFareScope
   // Pinned flights (migration 012) — null when the watch prices the
   // cheapest trip.
   outbound_flights?: string[] | null

@@ -5,7 +5,7 @@ import { getWatchDetail } from '@/lib/watches'
 import Nav from '@/components/Nav'
 import PriceHistoryChart from '@/components/PriceHistoryChart'
 import type { PriceCheck } from '@/types'
-import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatMissingFare, formatCheckCount, formatWatchLimits, pinPrefillParams, milesScope } from '@/lib/utils'
+import { formatCash, formatMiles, formatDate, pctChange, formatPctChange, changeColor, alertIcon, alertLabel, formatItineraryLine, formatCompetitorLine, formatReturnNote, formatMissingFare, formatCheckCount, formatWatchLimits, pinPrefillParams, watchFormParams, milesScope } from '@/lib/utils'
 import { googleFlightsUrl } from '@/lib/booking'
 import SeatsAeroCredit from '@/components/SeatsAeroCredit'
 
@@ -119,6 +119,19 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
                     style={{ color: '#64748b', textDecoration: 'none' }}
                   >
                     Watch just this flight
+                  </Link>
+                </>
+              )}
+              {/* Edit = a new watch with these settings pre-filled; saving
+                  archives this one (see watchFormParams). Active only. */}
+              {watch.status === 'active' && (
+                <>
+                  <span style={{ color: '#cbd5e1' }}> · </span>
+                  <Link
+                    href={`/watches/new?${new URLSearchParams(watchFormParams(watch))}`}
+                    style={{ color: '#64748b', textDecoration: 'none' }}
+                  >
+                    Change…
                   </Link>
                 </>
               )}

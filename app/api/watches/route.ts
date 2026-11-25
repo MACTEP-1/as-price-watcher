@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { origin, destination, departDate, returnDate, cabinClass, maxStops, fareScope, outboundFlights, returnFlights, excludeBasic } = body
+  const { origin, destination, departDate, returnDate, cabinClass, maxStops, fareScope, outboundFlights, returnFlights, excludeBasic, replacesWatchId } = body
 
   if (!origin || !destination || !departDate) {
     return NextResponse.json({ error: 'origin, destination, and departDate are required' }, { status: 400 })
@@ -125,6 +125,31 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  /**
+   * "Change…" (watch page): the form sends the id of the watch being
+   * edited. The edited settings are a different itinerary with its own
+   * history (see watchFormParams), so a change = create this watch, then
+   * archive that one (status 'removed', so it shows in Archive with its
+   * history). Checked BEFORE anything is created: it must be the caller's
+   * own active watch — RLS limits the select to their rows anyway.
+   */
+  let replacing: { id: string; itinerary_id: string } | null = null
+  if (replacesWatchId !== undefined && replacesWatchId !== null) {
+    if (typeof replacesWatchId !== 'string' || !/^[0-9a-f-]{36}$/i.test(replacesWatchId)) {
+      return NextResponse.json({ error: 'replacesWatchId must be a watch id' }, { status: 400 })
+    }
+    const { data: old } = await supabase
+      .from('watches')
+      .select('id, itinerary_id, status')
+      .eq('id', replacesWatchId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!old || old.status !== 'active') {
+      return NextResponse.json({ error: 'The watch being changed no longer exists or is already archived' }, { status: 404 })
+    }
+    replacing = { id: old.id, itinerary_id: old.itinerary_id }
+  }
+
   const effectiveMaxStops = pinOut ? null : normalisedMaxStops
   const effectiveFareScope = pinOut
     ? pinnedFareScope(pinOut, pinRet, !!normalisedReturn)
@@ -164,6 +189,15 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // A "change" that changes nothing would create a duplicate and archive the
+  // original — say so instead.
+  if (replacing && replacing.itinerary_id === itineraryId) {
+    return NextResponse.json(
+      { error: 'Nothing changed — this is the same watch. Adjust something, or go back.' },
+      { status: 400 }
+    )
+  }
+
   // One active watch per user per itinerary.
   const { data: existing } = await supabase
     .from('watches')
@@ -191,6 +225,21 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // The edited watch exists — now archive the one it replaces. Same update
+  // as "Remove watch" (app/api/watches/[id]/route.ts). If this fails the
+  // user simply has both for a moment; the new one is what they asked for,
+  // so report it rather than fail the whole request.
+  let replaced = false
+  if (replacing) {
+    const { error: archiveError } = await supabase
+      .from('watches')
+      .update({ status: 'removed' })
+      .eq('id', replacing.id)
+      .eq('user_id', user.id)
+    if (archiveError) console.error('[watches] archiving the replaced watch failed:', archiveError)
+    else replaced = true
+  }
 
   // ── First price check, right now ────────────────────────────────────
   // A brand-new watch otherwise shows nothing until tomorrow's cron run —
@@ -263,5 +312,5 @@ export async function POST(req: NextRequest) {
     console.error('[watches] immediate price check failed:', err)
   }
 
-  return NextResponse.json(data, { status: 201 })
+  return NextResponse.json(replacing ? { ...data, replaced } : data, { status: 201 })
 }

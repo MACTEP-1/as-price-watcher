@@ -30,6 +30,7 @@ export {
   formatWatchLimits,
   pinnedFareScope,
   pinPrefillParams,
+  watchFormParams,
   formatStopLimit,
   milesScope,
 } from './format'

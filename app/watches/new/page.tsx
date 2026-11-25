@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import AirportAutocomplete from '@/components/AirportAutocomplete'
-import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList, NO_SAVER_HINT } from '@/lib/format'
+import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList, NO_SAVER_HINT, parseStopsParam } from '@/lib/format'
 import { canExcludeBasic } from '@/lib/airports'
 
 const CABIN_OPTIONS = [
@@ -77,6 +77,8 @@ export default function NewWatchPage() {
   const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>('alaska_only')
   // Migration 013: skip Saver. Offered only where SerpApi supports it.
   const [noSaver, setNoSaver] = useState(false)
+  // "Change…" from a watch page: the watch this one replaces (archived on save).
+  const [replaces, setReplaces] = useState<string | null>(null)
   // Pinned flights (migration 012) — tucked behind a small link; most
   // watches want the cheapest trip.
   const [showPins, setShowPins] = useState(false)
@@ -84,12 +86,13 @@ export default function NewWatchPage() {
   const [pinRet, setPinRet] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Pre-fill from a watch page's "Watch just this flight" link
-  // (?from=&to=&depart=&return=&cabin=&out=). Read from window rather than
-  // useSearchParams, which would need a Suspense boundary for this page.
+  // Pre-fill from a watch page: "Watch just this flight" (?from=&to=&depart=
+  // &return=&cabin=&out=) or "Change…" (the same plus stops, scope, ret,
+  // nosaver and replaces — lib/format.ts watchFormParams). Read from window
+  // rather than useSearchParams, which would need a Suspense boundary.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
-    if (!q.get('out')) return
+    if (!q.get('from')) return
     setForm((f) => ({
       ...f,
       origin: q.get('from') ?? f.origin,
@@ -99,9 +102,14 @@ export default function NewWatchPage() {
       cabinClass: q.get('cabin') ?? f.cabinClass,
     }))
     setTripType(q.get('return') ? 'round_trip' : 'one_way')
+    setMaxStops(parseStopsParam(q.get('stops')))
+    const scope = q.get('scope')
+    if (scope === 'alaska_only' || scope === 'alaska_leg') setFareScope(scope)
     setPinOut(q.get('out') ?? '')
+    setPinRet(q.get('ret') ?? '')
+    setShowPins(!!q.get('out'))
     setNoSaver(q.get('nosaver') === '1')
-    setShowPins(true)
+    setReplaces(q.get('replaces'))
   }, [])
   const [error, setError] = useState('')
 
@@ -160,6 +168,7 @@ export default function NewWatchPage() {
         outboundFlights: outboundFlights.length ? outboundFlights : null,
         returnFlights: returnFlights.length ? returnFlights : null,
         excludeBasic: saverChoiceShown && noSaver,
+        replacesWatchId: replaces,
       }),
     })
     const data = await res.json()
@@ -181,7 +190,14 @@ export default function NewWatchPage() {
     <>
       <Nav />
       <main style={{ maxWidth: 520, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-        <h1 style={{ margin: '0 0 24px', fontSize: 24, fontWeight: 700, color: '#0f172a' }}>Watch a route</h1>
+        <h1 style={{ margin: '0 0 24px', fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{replaces ? 'Change watch' : 'Watch a route'}</h1>
+
+        {replaces && (
+          <p style={{ margin: '-12px 0 24px', padding: '10px 14px', fontSize: 13, lineHeight: 1.5, color: '#1e3a5f', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10 }}>
+            Saving starts a new watch with these settings and moves the current one to Archive, with its
+            price history. The new watch builds its own history, so alerts start after a few days of checks.
+          </p>
+        )}
 
         <div style={{ marginBottom: 24 }}>
           <p style={{ margin: '0 0 8px', fontSize: 12, color: '#94a3b8' }}>Popular routes</p>
@@ -389,7 +405,7 @@ export default function NewWatchPage() {
             disabled={loading}
             style={{ width: '100%', padding: 13, background: '#0060ac', color: '#fff', fontSize: 16, fontWeight: 700, border: 'none', borderRadius: 12, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}
           >
-            {loading ? 'Creating watch…' : 'Start watching'}
+            {loading ? 'Saving…' : replaces ? 'Save changes' : 'Start watching'}
           </button>
 
           <p style={{ margin: 0, fontSize: 12, textAlign: 'center', color: '#94a3b8' }}>

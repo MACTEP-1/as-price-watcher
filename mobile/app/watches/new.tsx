@@ -11,7 +11,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { createWatch } from '../../lib/api'
 import DatePickerField from '../../components/DatePickerField'
 import AirportAutocomplete from '../../components/AirportAutocomplete'
-import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList, NO_SAVER_HINT } from '../../../lib/format'
+import { FARE_SCOPE_OPTIONS, fareScopeHint, parseFlightList, NO_SAVER_HINT, parseStopsParam } from '../../../lib/format'
 import { canExcludeBasic } from '../../../lib/airports'
 
 const CABIN_OPTIONS = [
@@ -73,10 +73,13 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
  */
 export default function NewWatchScreen() {
   const router = useRouter()
-  // Pre-fill from a watch screen's "Watch just this flight" (migration 012).
+  // Pre-fill from a watch screen: "Watch just this flight" (migration 012)
+  // or "Change…" (everything + replaces — lib/format.ts watchFormParams).
   const prefill = useLocalSearchParams<{
     from?: string; to?: string; depart?: string; return?: string; cabin?: string; out?: string; nosaver?: string
+    ret?: string; stops?: string; scope?: string; replaces?: string
   }>()
+  const replaces = prefill.replaces ?? null
   const [tripType, setTripType] = useState<TripType>(prefill.return ? 'round_trip' : 'one_way')
   const [form, setForm] = useState({
     origin: prefill.from ?? '',
@@ -88,9 +91,11 @@ export default function NewWatchScreen() {
   // Pinned flights — behind a small link unless pre-filled.
   const [showPins, setShowPins] = useState(!!prefill.out)
   const [pinOut, setPinOut] = useState(prefill.out ?? '')
-  const [pinRet, setPinRet] = useState('')
-  const [maxStops, setMaxStops] = useState<number | null>(null)
-  const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>('alaska_only')
+  const [pinRet, setPinRet] = useState(prefill.ret ?? '')
+  const [maxStops, setMaxStops] = useState<number | null>(parseStopsParam(prefill.stops))
+  const [fareScope, setFareScope] = useState<'alaska_only' | 'alaska_leg'>(
+    prefill.scope === 'alaska_leg' ? 'alaska_leg' : 'alaska_only'
+  )
   // Migration 013: skip Saver — offered only for US domestic economy.
   const [noSaver, setNoSaver] = useState(prefill.nosaver === '1')
   const saverChoiceShown = canExcludeBasic(form.origin, form.destination, form.cabinClass)
@@ -168,6 +173,7 @@ export default function NewWatchScreen() {
         outboundFlights: outboundFlights.length ? outboundFlights : null,
         returnFlights: returnFlights.length ? returnFlights : null,
         excludeBasic: saverChoiceShown && noSaver,
+        replacesWatchId: replaces,
       })
       router.replace(`/watches/${watch.id}`)
     } catch (err) {
@@ -189,7 +195,13 @@ export default function NewWatchScreen() {
         <Text style={styles.back}>‹ Back</Text>
       </Pressable>
 
-      <Text style={styles.title}>Watch a route</Text>
+      <Text style={styles.title}>{replaces ? 'Change watch' : 'Watch a route'}</Text>
+      {replaces ? (
+        <Text style={styles.changeNote}>
+          Saving starts a new watch with these settings and moves the current one to Archive, with its
+          price history. The new watch builds its own history, so alerts start after a few days of checks.
+        </Text>
+      ) : null}
 
       <View style={styles.card}>
       <Text style={[styles.label, styles.labelFirst]}>Popular routes</Text>
@@ -419,7 +431,7 @@ export default function NewWatchScreen() {
         disabled={loading}
       >
         <Text style={styles.submitText}>
-          {loading ? 'Creating watch…' : 'Start watching'}
+          {loading ? 'Saving…' : replaces ? 'Save changes' : 'Start watching'}
         </Text>
       </Pressable>
 
@@ -456,6 +468,17 @@ const styles = StyleSheet.create({
   },
   labelFirst: { marginTop: 0 },
   fieldHint: { fontSize: 12, color: '#94a3b8', marginTop: 6 },
+  changeNote: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#1e3a5f',
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
   pinLink: { fontSize: 12, color: '#0060ac', marginTop: 12 },
   pinInput: {
     borderWidth: 1.5,

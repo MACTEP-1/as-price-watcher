@@ -368,6 +368,52 @@ export function pinPrefillParams(
   return p
 }
 
+/**
+ * "Change…" on a watch page: the new-watch form's query parameters,
+ * pre-filled with EVERYTHING that defines the watch, plus `replaces` — so
+ * saving starts the edited watch and archives this one (app/api/watches).
+ * A real edit-in-place doesn't exist on purpose: route, dates, stops,
+ * airlines, flights and Saver all change WHAT is priced, so the edited
+ * watch is a different itinerary with its own price history (a Saver
+ * series and a Main series are ~$50 apart), never a continuation.
+ */
+export function watchFormParams(w: {
+  id: string
+  origin: string
+  destination: string
+  depart_date: string
+  return_date: string | null
+  cabin_class: string
+  max_stops: number | null
+  fare_scope?: string | null
+  outbound_flights?: string[] | null
+  return_flights?: string[] | null
+  exclude_basic?: boolean
+}): Record<string, string> {
+  const p: Record<string, string> = {
+    replaces: w.id,
+    from: w.origin,
+    to: w.destination,
+    depart: w.depart_date,
+    cabin: w.cabin_class,
+  }
+  if (w.return_date) p.return = w.return_date
+  if (w.outbound_flights?.length) {
+    p.out = formatFlightList(w.outbound_flights)
+    if (w.return_flights?.length) p.ret = formatFlightList(w.return_flights)
+  } else if (w.max_stops != null) {
+    p.stops = String(w.max_stops)
+  }
+  if (w.fare_scope === 'alaska_only' || w.fare_scope === 'alaska_leg') p.scope = w.fare_scope
+  if (w.exclude_basic) p.nosaver = '1'
+  return p
+}
+
+/** The `stops` query parameter back to a stop limit: '0'/'1'/'2', else any. */
+export function parseStopsParam(v: string | null | undefined): number | null {
+  return v === '0' || v === '1' || v === '2' ? Number(v) : null
+}
+
 /** ['AS623','AS625'] → "AS 623 + AS 625". */
 export function formatFlightList(flights: string[] | null | undefined): string {
   return (flights ?? []).map((f) => formatFlightNumber(f) ?? f).join(' + ')
